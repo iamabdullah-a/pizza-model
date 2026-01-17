@@ -1,90 +1,151 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Local WebAR Hiro + GLB</title>
+  <meta charset="utf-8" />
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>Premium WebAR</title>
 
   <!-- A-Frame -->
   <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
+
   <!-- AR.js -->
   <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
 
   <style>
-    html, body { margin:0; padding:0; height:100%; background:#000; overflow:hidden; }
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: #000;
+      overflow: hidden;
+    }
+
     #loader {
-      position: fixed; inset:0;
-      display:flex; justify-content:center; align-items:center;
-      background: rgba(0,0,0,0.85); color:#fff; font-family: system-ui;
-      z-index:9999;
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0,0,0,.85);
+      color: #fff;
+      font-family: system-ui;
+      z-index: 9999;
     }
-    .spinner { width:56px; height:56px; border-radius:50%; border:6px solid rgba(255,255,255,0.15); border-top-color:#fff; animation:spin 1s linear infinite; }
+
+    .spinner {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      border: 6px solid rgba(255,255,255,.15);
+      border-top-color: #fff;
+      animation: spin 1s linear infinite;
+    }
+
     @keyframes spin { to { transform: rotate(360deg); } }
+
     .hint {
-      position:fixed; bottom:14px; left:50%; transform:translateX(-50%);
-      background: rgba(0,0,0,0.6); color:#fff; padding:10px 14px;
-      border-radius:12px; font-family:system-ui; font-size:13px; z-index:9998;
+      position: fixed;
+      bottom: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,.6);
+      color: #fff;
+      padding: 10px 14px;
+      border-radius: 12px;
+      font-size: 13px;
+      font-family: system-ui;
+      z-index: 9998;
     }
-    .a-video { display:none !important; } /* Hide the small video box AR.js creates */
   </style>
 </head>
+
 <body>
 
-<div id="loader"><div class="spinner"></div></div>
-<div class="hint">Point camera at Hiro marker · Drag to rotate · Pinch to zoom</div>
+<div id="loader">
+  <div style="text-align:center">
+    <div class="spinner"></div>
+    <div style="margin-top:12px">Loading AR…</div>
+  </div>
+</div>
+
+<div class="hint">Point camera at marker · Drag to rotate · Pinch to zoom</div>
 
 <a-scene
+  embedded
   vr-mode-ui="enabled:false"
-  renderer="antialias:true; colorManagement:true; physicallyCorrectLights:true; toneMapping:ACESFilmic; exposure:1.2;"
+  renderer="antialias:true; colorManagement:true; physicallyCorrectLights:true"
   arjs="
     sourceType: webcam;
-    sourceWidth:1280;
-    sourceHeight:720;
-    displayWidth:window.innerWidth;
-    displayHeight:window.innerHeight;
-    debugUIEnabled:false;
+    trackingMethod: best;
+    detectionMode: mono_and_matrix;
+    matrixCodeType: 3x3;
+    debugUIEnabled: false;
   "
 >
 
-  <!-- Hiro Marker -->
-  <a-marker preset="hiro" smooth="true" smoothCount="15" smoothTolerance="0.01" smoothThreshold="4">
+  <!-- Assets -->
+  <a-assets timeout="60000">
+    <a-asset-item id="model" src="assets/model.glb"></a-asset-item>
+  </a-assets>
 
-    <!-- Shadow plane -->
-    <a-plane rotation="-90 0 0" width="0.5" height="0.5" material="color:#000; opacity:0.18; shader:flat" position="0 0.001 0"></a-plane>
+  <!-- Lighting (mobile optimized) -->
+  <a-entity light="type: ambient; intensity: 0.9"></a-entity>
+  <a-entity light="type: directional; intensity: 0.6" position="1 2 1"></a-entity>
 
-    <!-- Your GLB model -->
+  <!-- Marker -->
+  <a-marker
+    type="pattern"
+    url="assets/marker.patt"
+    size="0.12"
+    smooth="true"
+    smoothCount="15"
+    smoothTolerance="0.01"
+    smoothThreshold="4"
+    id="marker"
+  >
+
+    <!-- Shadow -->
+    <a-plane
+      rotation="-90 0 0"
+      width="0.5"
+      height="0.5"
+      material="color:#000; opacity:0.15; shader:flat"
+      position="0 0.001 0">
+    </a-plane>
+
+    <!-- Model -->
     <a-entity
       id="modelWrapper"
-      gltf-model="assets/model.glb"
+      gltf-model="#model"
       rotation="-90 0 180"
       auto-scale
-      gesture-controls
-      shadow="cast:true; receive:false"
-    ></a-entity>
+      gesture-controls>
+    </a-entity>
 
   </a-marker>
 
-  <!-- Camera -->
   <a-entity camera="near:0.01; far:50"></a-entity>
 
 </a-scene>
 
 <script>
-/* Hide loader after model loads */
+/* Hide loader */
 const loader = document.getElementById('loader');
-document.querySelector('#modelWrapper').addEventListener('model-loaded', () => {
+document.querySelector('#model').addEventListener('loaded', () => {
   loader.style.display = 'none';
 });
 
-/* Auto scale component */
+/* Auto scale model to real-world size */
 AFRAME.registerComponent('auto-scale', {
   init() {
     this.el.addEventListener('model-loaded', () => {
       const obj = this.el.getObject3D('mesh');
       if (!obj) return;
+
       const box = new THREE.Box3().setFromObject(obj);
       const size = new THREE.Vector3();
       box.getSize(size);
+
       const targetSize = 0.08; // meters
       const scale = targetSize / Math.max(size.x, size.z);
       this.el.object3D.scale.set(scale, scale, scale);
@@ -92,36 +153,35 @@ AFRAME.registerComponent('auto-scale', {
   }
 });
 
-/* Gesture controls for rotate + pinch zoom */
+/* Gesture controls */
 AFRAME.registerComponent('gesture-controls', {
   init() {
     this.startScale = this.el.object3D.scale.clone();
     this.scaleFactor = 1;
 
-    this.el.sceneEl.addEventListener('gesturestart', () => {
-      this.startScale = this.el.object3D.scale.clone();
-    });
-
     this.el.sceneEl.addEventListener('onefingermove', e => {
-      if (!this.el.object3D) return;
       this.el.object3D.rotation.y += e.detail.positionChange.x * 0.008;
     });
 
     this.el.sceneEl.addEventListener('twofingermove', e => {
-      if (!this.el.object3D) return;
       this.scaleFactor *= e.detail.scale;
-      this.scaleFactor = Math.min(2.5, Math.max(0.5, this.scaleFactor));
+      this.scaleFactor = Math.min(2.2, Math.max(0.6, this.scaleFactor));
+
       this.el.object3D.scale.set(
         this.startScale.x * this.scaleFactor,
         this.startScale.y * this.scaleFactor,
         this.startScale.z * this.scaleFactor
       );
     });
+
+    this.el.sceneEl.addEventListener('gesturestart', () => {
+      this.startScale = this.el.object3D.scale.clone();
+    });
   }
 });
 
-/* Hide hint when marker found */
-document.querySelector('a-marker').addEventListener('markerFound', () => {
+/* Hide hint once marker found */
+document.getElementById('marker').addEventListener('markerFound', () => {
   document.querySelector('.hint').style.display = 'none';
 });
 </script>
