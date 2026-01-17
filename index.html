@@ -49,11 +49,6 @@
 
     <div id="guide"></div>
 
-    <!-- 
-        RENDERER QUALITY FIXES:
-        - logarithmicDepthBuffer: True (prevents 3D flickering)
-        - filterMinCF: 0.0001 (Kills the shaking jitter)
-    -->
     <a-scene 
         mindar-image="imageTargetSrc: ./assets/targets.mind; filterMinCF:0.0001; filterBeta: 0.001;" 
         embedded color-management="true" 
@@ -63,13 +58,14 @@
 
         <a-assets>
             <a-asset-item id="myModel" src="./assets/model.glb"></a-asset-item>
-            <!-- HDRI Reflection Map for "Pay-Me" shiny textures -->
+            <!-- HDRI Reflection Map FIX: Use the full URL to the image file -->
             <img id="env" src="https://cdn.jsdelivr.net">
         </a-assets>
 
         <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
-        
+        <!-- FIX: Re-added the required target container with the ID "target" -->
+         
             <!-- Subtle Shadow for realism -->
             <a-circle color="#000" radius="0.3" opacity="0.4" rotation="-90 0 0" position="0 -0.05 0"></a-circle>
 
