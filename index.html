@@ -1,121 +1,118 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Enterprise WebAR | 2026</title>
+    <title>Enterprise AR | 2026</title>
     
-    <!-- Frameworks -->
-    <script src="https://aframe.io"></script>
-    <script src="https://cdn.jsdelivr.net"></script>
+    <!-- PRELOAD: This starts the download before the script even runs -->
+    <link rel="preload" href="./assets/model.glb" as="fetch" crossorigin>
+    <link rel="preload" href="./assets/targets.mind" as="fetch" crossorigin>
+
+    <!-- LOCAL SCRIPTS: Much faster than CDN -->
+    <script src="./assets/aframe.min.js"></script>
+    <script src="./assets/mindar-image.prod.js"></script>
 
     <style>
-        /* Modern UI Overlay */
+        body { margin: 0; overflow: hidden; background: #000; }
+        
+        /* Premium Loading UI */
         #ui-overlay {
             position: fixed; inset: 0; z-index: 999;
-            background: radial-gradient(circle, #222 0%, #000 100%);
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            transition: opacity 0.8s ease;
+            background: #111; display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            transition: opacity 0.6s ease;
         }
-        .loader {
-            width: 48px; height: 48px;
-            border: 5px solid #FFF; border-bottom-color: #00e5ff;
-            border-radius: 50%; animation: rotation 1s linear infinite;
+        .spinner {
+            width: 40px; height: 40px;
+            border: 4px solid #333; border-top: 4px solid #00f2ff;
+            border-radius: 50%; animation: spin 0.8s linear infinite;
         }
-        @keyframes rotation { 0% { transform: rotate(0deg) } 100% { transform: rotate(360deg) } }
+        @keyframes spin { to { transform: rotate(360deg); } }
         .hidden { opacity: 0; pointer-events: none; }
-        
-        /* Scan Ghost UI - Makes it look Pro */
-        #scan-guide {
+
+        /* Scanning Bracket UI */
+        #guide {
             position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            width: 250px; height: 250px; border: 2px solid rgba(0, 229, 255, 0.5);
-            border-radius: 20px; z-index: 10; pointer-events: none; display: none;
+            width: 70vw; height: 70vw; max-width: 300px; max-height: 300px;
+            border: 2px solid rgba(0, 242, 255, 0.3); border-radius: 20px;
+            z-index: 10; display: none; pointer-events: none;
         }
     </style>
 </head>
 
 <body>
     <div id="ui-overlay">
-        <div class="loader"></div>
-        <p style="color: white; font-family: sans-serif; margin-top: 20px; letter-spacing: 2px;">INITIALIZING ENGINE</p>
+        <div class="spinner"></div>
+        <p style="color: #00f2ff; font-family: sans-serif; margin-top: 15px; font-size: 12px; letter-spacing: 2px;">SYNCING AR ENGINE</p>
     </div>
 
-    <div id="scan-guide"></div>
+    <div id="guide"></div>
 
     <!-- 
-      QUALITY SETTINGS:
-      - warmupTolerance: 5 (Smoother start)
-      - missTolerance: 15 (Harder to lose tracking)
-      - filterMinCF: 0.0001 (Zero Jitter)
+        RENDERER QUALITY FIXES:
+        - logarithmicDepthBuffer: True (prevents 3D flickering)
+        - filterMinCF: 0.0001 (Kills the shaking jitter)
     -->
     <a-scene 
-        mindar-image="imageTargetSrc: ./assets/targets.mind; filterMinCF:0.0001; filterBeta: 0.001; warmupTolerance: 5; missTolerance: 15;" 
+        mindar-image="imageTargetSrc: ./assets/targets.mind; filterMinCF:0.0001; filterBeta: 0.001;" 
         embedded color-management="true" 
-        renderer="antialias: true; colorManagement: true; physicallyCorrectLights: true; logarithmicDepthBuffer: true; precision: high;"
+        renderer="antialias: true; colorManagement: true; physicallyCorrectLights: true; logarithmicDepthBuffer: true;"
         vr-mode-ui="enabled: false"
         device-orientation-permission-ui="enabled: false">
 
         <a-assets>
             <a-asset-item id="myModel" src="./assets/model.glb"></a-asset-item>
-            <!-- High-quality lighting environment -->
-            <img id="reflection" src="https://cdn.jsdelivr.net">
+            <!-- HDRI Reflection Map for "Pay-Me" shiny textures -->
+            <img id="env" src="https://cdn.jsdelivr.net">
         </a-assets>
 
         <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
         
-            
-            <!-- Floating Shadow (Visual trick for depth) -->
-            <a-circle color="#000" radius="0.4" opacity="0.3" rotation="-90 0 0" position="0 -0.01 0"></a-circle>
+            <!-- Subtle Shadow for realism -->
+            <a-circle color="#000" radius="0.3" opacity="0.4" rotation="-90 0 0" position="0 -0.05 0"></a-circle>
 
-            <!-- The Model with advanced material settings -->
             <a-gltf-model 
                 src="#myModel" 
                 rotation="0 0 0" 
                 position="0 0 0" 
                 scale="1 1 1"
-                animation="property: rotation; to: 0 360 0; loop: true; dur: 10000; easing: linear"
-                /* Environment injection for realistic metal/glass */
-                class="clickable">
+                class="ar-model">
             </a-gltf-model>
 
-            <!-- Dual-tone lighting for professional 'Studio' look -->
-            <a-light type="directional" color="#fff" intensity="1.2" position="-1 2 1"></a-light>
-            <a-light type="directional" color="#00e5ff" intensity="0.5" position="1 1 1"></a-light>
+            <!-- Dual-Source Lighting -->
+            <a-light type="directional" intensity="1.2" position="-1 2 1"></a-light>
+            <a-light type="directional" color="#00f2ff" intensity="0.4" position="1 1 1"></a-light>
         
     </a-scene>
 
     <script>
-        const sceneEl = document.querySelector('a-scene');
+        const scene = document.querySelector('a-scene');
         const overlay = document.querySelector('#ui-overlay');
-        const guide = document.querySelector('#scan-guide');
+        const guide = document.querySelector('#guide');
+        const target = document.querySelector('#target');
 
-        // Engine Ready
-        sceneEl.addEventListener("arReady", () => {
+        // Close loading screen when camera & engine are hot
+        scene.addEventListener("arReady", () => {
             overlay.classList.add('hidden');
             guide.style.display = "block";
         });
 
-        // Target Found - Professional UI response
-        const target = document.querySelector('#target-anchor');
-        target.addEventListener("targetFound", () => {
-            guide.style.display = "none";
-            console.log("Target Locked");
-        });
+        // UI Logic for target discovery
+        target.addEventListener("targetFound", () => guide.style.display = "none");
+        target.addEventListener("targetLost", () => guide.style.display = "block");
 
-        target.addEventListener("targetLost", () => {
-            guide.style.display = "block";
-        });
-
-        // "Pay-Me" Quality Fix: Environment Map Application
-        sceneEl.addEventListener('model-loaded', (e) => {
+        // Advanced Environment Mapping (Reflection Logic)
+        scene.addEventListener('model-loaded', (e) => {
             const mesh = e.target.getObject3D('mesh');
-            const texture = new THREE.TextureLoader().load(document.querySelector('#reflection').src);
+            const texture = new THREE.TextureLoader().load(document.querySelector('#env').src);
             texture.mapping = THREE.EquirectangularReflectionMapping;
             
             mesh.traverse((node) => {
                 if (node.isMesh) {
                     node.material.envMap = texture;
-                    node.material.envMapIntensity = 1.5;
+                    node.material.envMapIntensity = 1.2;
                     node.material.needsUpdate = true;
                 }
             });
