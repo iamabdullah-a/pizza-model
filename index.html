@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Enterprise AR | 2026</title>
     
-    <!-- PRELOAD: This starts the download before the script even runs -->
+    <!-- PRELOAD: This starts the download before the script even runs, fixing the 30-sec lag -->
     <link rel="preload" href="./assets/model.glb" as="fetch" crossorigin>
     <link rel="preload" href="./assets/targets.mind" as="fetch" crossorigin>
 
@@ -49,8 +49,18 @@
 
     <div id="guide"></div>
 
+    <!-- 
+        OPTIMIZED A-SCENE SETTINGS:
+        - filterMinCF/filterBeta: Adjusted for a balance of speed and stability.
+        - maxTrackRate/warmupTolerance: Prioritize fast recognition time (fixes laptop screen lag).
+    -->
     <a-scene 
-        mindar-image="imageTargetSrc: ./assets/targets.mind; filterMinCF:0.0001; filterBeta: 0.001;" 
+        mindar-image="
+            imageTargetSrc: ./assets/targets.mind; 
+            filterMinCF:0.1; filterBeta: 0.1; 
+            warmupTolerance: 2; maxTrackRate: 30;
+            missTolerance: 5;
+        " 
         embedded color-management="true" 
         renderer="antialias: true; colorManagement: true; physicallyCorrectLights: true; logarithmicDepthBuffer: true;"
         vr-mode-ui="enabled: false"
@@ -66,6 +76,7 @@
 
         <!-- FIX: Re-added the required target container with the ID "target" -->
          
+            
             <!-- Subtle Shadow for realism -->
             <a-circle color="#000" radius="0.3" opacity="0.4" rotation="-90 0 0" position="0 -0.05 0"></a-circle>
 
