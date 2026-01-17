@@ -1,316 +1,129 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport"
-        content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-  <title>Premium WebAR — Fixed</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Local WebAR Hiro + GLB</title>
 
   <!-- A-Frame -->
   <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
-
-  <!-- AR.js (keep this raw.githack path if you used it before) -->
+  <!-- AR.js -->
   <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
 
   <style>
-    html, body {
-      margin: 0;
-      height: 100%;
-      background: #000;
-      overflow: hidden;
-    }
+    html, body { margin:0; padding:0; height:100%; background:#000; overflow:hidden; }
     #loader {
-      position: fixed;
-      inset: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: rgba(0,0,0,.85);
-      color: #fff;
-      font-family: system-ui;
-      z-index: 9999;
+      position: fixed; inset:0;
+      display:flex; justify-content:center; align-items:center;
+      background: rgba(0,0,0,0.85); color:#fff; font-family: system-ui;
+      z-index:9999;
     }
-    .spinner {
-      width: 56px;
-      height: 56px;
-      border-radius: 50%;
-      border: 6px solid rgba(255,255,255,.15);
-      border-top-color: #fff;
-      animation: spin 1s linear infinite;
-    }
+    .spinner { width:56px; height:56px; border-radius:50%; border:6px solid rgba(255,255,255,0.15); border-top-color:#fff; animation:spin 1s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
     .hint {
-      position: fixed;
-      bottom: 16px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(0,0,0,.6);
-      color: #fff;
-      padding: 10px 14px;
-      border-radius: 12px;
-      font-size: 13px;
-      font-family: system-ui;
-      z-index: 9998;
+      position:fixed; bottom:14px; left:50%; transform:translateX(-50%);
+      background: rgba(0,0,0,0.6); color:#fff; padding:10px 14px;
+      border-radius:12px; font-family:system-ui; font-size:13px; z-index:9998;
     }
-    /* Small helpful message when camera blocked */
-    .camera-warning {
-      position: fixed;
-      top: 12px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: #ffcc00;
-      color: #000;
-      padding: 6px 10px;
-      border-radius: 8px;
-      font-family: system-ui;
-      z-index: 9999;
-      display: none;
-    }
+    .a-video { display:none !important; } /* Hide the small video box AR.js creates */
   </style>
 </head>
-
 <body>
 
-<div id="loader">
-  <div style="text-align:center">
-    <div class="spinner"></div>
-    <div style="margin-top:12px">Loading AR…</div>
-  </div>
-</div>
-
-<div class="camera-warning" id="cameraWarning">Camera permission blocked — open the page in Chrome / Safari and allow the camera.</div>
-<div class="hint" id="hint">Point camera at marker · Drag to rotate · Pinch to zoom</div>
+<div id="loader"><div class="spinner"></div></div>
+<div class="hint">Point camera at Hiro marker · Drag to rotate · Pinch to zoom</div>
 
 <a-scene
-  embedded
   vr-mode-ui="enabled:false"
-  renderer="antialias:true"
+  renderer="antialias:true; colorManagement:true; physicallyCorrectLights:true; toneMapping:ACESFilmic; exposure:1.2;"
   arjs="
     sourceType: webcam;
-    // stable choice for marker-based detection:
-    trackingMethod: artoolkit;
-    detectionMode: mono;
-    // you can tune source resolution for better performance:
-    sourceWidth: 640;
-    sourceHeight: 480;
-    debugUIEnabled: false;
+    sourceWidth:1280;
+    sourceHeight:720;
+    displayWidth:window.innerWidth;
+    displayHeight:window.innerHeight;
+    debugUIEnabled:false;
   "
-  >
+>
 
-  <!-- Assets -->
-  <a-assets timeout="60000">
-    <!-- Put your model at assets/model.glb -->
-    <a-asset-item id="model" src="assets/model.glb"></a-asset-item>
-  </a-assets>
+  <!-- Hiro Marker -->
+  <a-marker preset="hiro" smooth="true" smoothCount="15" smoothTolerance="0.01" smoothThreshold="4">
 
-  <!-- Lighting -->
-  <a-entity light="type: ambient; intensity: 0.9"></a-entity>
-  <a-entity light="type: directional; intensity: 0.6" position="1 2 1"></a-entity>
+    <!-- Shadow plane -->
+    <a-plane rotation="-90 0 0" width="0.5" height="0.5" material="color:#000; opacity:0.18; shader:flat" position="0 0.001 0"></a-plane>
 
-  <!-- Marker: use your pattern file at assets/marker.patt -->
-  <a-marker
-    type="pattern"
-    url="assets/marker.patt"
-    size="0.12"
-    id="marker"
-  >
-
-    <!-- shadow plane -->
-    <a-plane
-      rotation="-90 0 0"
-      width="0.5"
-      height="0.5"
-      material="color:#000; opacity:0.15; shader:flat"
-      position="0 0.001 0">
-    </a-plane>
-
-    <!-- Model wrapper with auto-scale and local gesture component -->
+    <!-- Your GLB model -->
     <a-entity
       id="modelWrapper"
-      gltf-model="#model"
+      gltf-model="assets/model.glb"
       rotation="-90 0 180"
       auto-scale
-      gesture-controls>
-    </a-entity>
+      gesture-controls
+      shadow="cast:true; receive:false"
+    ></a-entity>
 
   </a-marker>
 
+  <!-- Camera -->
   <a-entity camera="near:0.01; far:50"></a-entity>
 
 </a-scene>
 
 <script>
-/* Loader hide: hide when model is ready (either asset loaded or entity model-loaded) */
+/* Hide loader after model loads */
 const loader = document.getElementById('loader');
-const modelAsset = document.getElementById('model');
-const modelEntity = document.querySelector('[gltf-model="#model"]');
-
-function hideLoader() {
+document.querySelector('#modelWrapper').addEventListener('model-loaded', () => {
   loader.style.display = 'none';
-}
-if (modelAsset) {
-  modelAsset.addEventListener('loaded', hideLoader);
-}
-if (modelEntity) {
-  modelEntity.addEventListener('model-loaded', hideLoader);
-}
+});
 
-/* Show camera warning if getUserMedia fails (helpful for in-app browsers) */
-function showCameraWarning() {
-  const w = document.getElementById('cameraWarning');
-  w.style.display = 'block';
-  setTimeout(() => { w.style.display = 'none'; }, 7000);
-}
-
-/* Auto scale model to a target real-world size (meters) */
+/* Auto scale component */
 AFRAME.registerComponent('auto-scale', {
   init() {
     this.el.addEventListener('model-loaded', () => {
-      const obj = this.el.getObject3D('mesh') || this.el.getObject3D('scene');
+      const obj = this.el.getObject3D('mesh');
       if (!obj) return;
-      // compute bounding box
       const box = new THREE.Box3().setFromObject(obj);
       const size = new THREE.Vector3();
       box.getSize(size);
-      const targetSize = 0.08; // meters (adjust as needed)
-      const maxDim = Math.max(size.x, size.y, size.z);
-      if (maxDim === 0) return;
-      const scale = targetSize / maxDim;
+      const targetSize = 0.08; // meters
+      const scale = targetSize / Math.max(size.x, size.z);
       this.el.object3D.scale.set(scale, scale, scale);
     });
   }
 });
 
-/* Simple, self-contained gesture-controls (rotate + pinch) */
+/* Gesture controls for rotate + pinch zoom */
 AFRAME.registerComponent('gesture-controls', {
   init() {
     this.startScale = this.el.object3D.scale.clone();
-    this.minScale = 0.6;
-    this.maxScale = 2.2;
+    this.scaleFactor = 1;
 
-    // State
-    this._touching = false;
-    this._prevX = null;
-    this._prevDist = null;
-    this._startScale = this.el.object3D.scale.clone();
-
-    // Bind handlers
-    this._onTouchStart = this._onTouchStart.bind(this);
-    this._onTouchMove = this._onTouchMove.bind(this);
-    this._onTouchEnd = this._onTouchEnd.bind(this);
-    this._onMouseDown = this._onMouseDown.bind(this);
-    this._onMouseMove = this._onMouseMove.bind(this);
-    this._onMouseUp = this._onMouseUp.bind(this);
-
-    // Wait until scene canvas is ready
-    this.el.sceneEl.addEventListener('renderstart', () => {
-      const canvas = this.el.sceneEl.canvas;
-      if (!canvas) return;
-      // Touch events
-      canvas.addEventListener('touchstart', this._onTouchStart, { passive: false });
-      canvas.addEventListener('touchmove', this._onTouchMove, { passive: false });
-      canvas.addEventListener('touchend', this._onTouchEnd, { passive: false });
-      canvas.addEventListener('touchcancel', this._onTouchEnd, { passive: false });
-      // Mouse fallback
-      canvas.addEventListener('mousedown', this._onMouseDown);
-      window.addEventListener('mousemove', this._onMouseMove);
-      window.addEventListener('mouseup', this._onMouseUp);
+    this.el.sceneEl.addEventListener('gesturestart', () => {
+      this.startScale = this.el.object3D.scale.clone();
     });
-  },
 
-  _getDist(touches) {
-    const dx = touches[0].clientX - touches[1].clientX;
-    const dy = touches[0].clientY - touches[1].clientY;
-    return Math.sqrt(dx * dx + dy * dy);
-  },
+    this.el.sceneEl.addEventListener('onefingermove', e => {
+      if (!this.el.object3D) return;
+      this.el.object3D.rotation.y += e.detail.positionChange.x * 0.008;
+    });
 
-  _onTouchStart(e) {
-    if (!e.touches) return;
-    if (e.touches.length === 1) {
-      this._prevX = e.touches[0].clientX;
-    } else if (e.touches.length === 2) {
-      this._prevDist = this._getDist(e.touches);
-      this._startScale = this.el.object3D.scale.clone();
-    }
-  },
-
-  _onTouchMove(e) {
-    if (!e.touches) return;
-    if (e.touches.length === 1 && this._prevX !== null) {
-      e.preventDefault();
-      const dx = e.touches[0].clientX - this._prevX;
-      this._prevX = e.touches[0].clientX;
-      // rotate around Y
-      this.el.object3D.rotation.y += dx * 0.008;
-    } else if (e.touches.length === 2 && this._prevDist !== null) {
-      e.preventDefault();
-      const dist = this._getDist(e.touches);
-      const factor = dist / this._prevDist;
-      const newScaleX = THREE.MathUtils.clamp(this._startScale.x * factor, this.minScale, this.maxScale);
-      const newScaleY = THREE.MathUtils.clamp(this._startScale.y * factor, this.minScale, this.maxScale);
-      const newScaleZ = THREE.MathUtils.clamp(this._startScale.z * factor, this.minScale, this.maxScale);
-      this.el.object3D.scale.set(newScaleX, newScaleY, newScaleZ);
-    }
-  },
-
-  _onTouchEnd(e) {
-    // Reset single-touch state if no touches left
-    if (!e.touches || e.touches.length === 0) {
-      this._prevX = null;
-      this._prevDist = null;
-    } else if (e.touches.length === 1) {
-      this._prevDist = null;
-      this._prevX = e.touches[0].clientX;
-    }
-  },
-
-  // Mouse handlers (rotate with drag, wheel could be added for zoom)
-  _onMouseDown(e) {
-    this._mouseDown = true;
-    this._mousePrevX = e.clientX;
-  },
-
-  _onMouseMove(e) {
-    if (!this._mouseDown) return;
-    const dx = e.clientX - this._mousePrevX;
-    this._mousePrevX = e.clientX;
-    this.el.object3D.rotation.y += dx * 0.008;
-  },
-
-  _onMouseUp() {
-    this._mouseDown = false;
-  },
-
-  remove() {
-    // remove listeners if needed (not strictly necessary here)
+    this.el.sceneEl.addEventListener('twofingermove', e => {
+      if (!this.el.object3D) return;
+      this.scaleFactor *= e.detail.scale;
+      this.scaleFactor = Math.min(2.5, Math.max(0.5, this.scaleFactor));
+      this.el.object3D.scale.set(
+        this.startScale.x * this.scaleFactor,
+        this.startScale.y * this.scaleFactor,
+        this.startScale.z * this.scaleFactor
+      );
+    });
   }
 });
 
-/* Hide hint when marker found and show again on lost */
-const marker = document.getElementById('marker');
-const hint = document.getElementById('hint');
-if (marker) {
-  marker.addEventListener('markerFound', () => {
-    hint.style.display = 'none';
-  });
-  marker.addEventListener('markerLost', () => {
-    hint.style.display = 'block';
-  });
-}
-
-/* Small runtime check: if camera can't start, show message */
-document.addEventListener('arjs-video-loaded', () => {
-  // arjs-video-loaded is fired by AR.js when the video element is ready
-  // if it's not fired and there's a permission problem, fallback will show warning
+/* Hide hint when marker found */
+document.querySelector('a-marker').addEventListener('markerFound', () => {
+  document.querySelector('.hint').style.display = 'none';
 });
-
-setTimeout(() => {
-  // If loader still visible after 8s, likely camera blocked or heavy device
-  if (loader.style.display !== 'none') {
-    showCameraWarning();
-  }
-}, 8000);
-
 </script>
 
 </body>
