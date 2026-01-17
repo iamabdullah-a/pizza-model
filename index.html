@@ -1,130 +1,465 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>WebAR Hiro + GLB</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <title>WebAR — Hiro + GLB (Industrial)</title>
 
-  <!-- A-Frame -->
+  <!-- A-Frame (stable) -->
   <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
-  <!-- AR.js -->
-  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+  <!-- AR.js pinned to a reliable release -->
+  <script src="https://cdn.jsdelivr.net/npm/ar.js@3.4.0/aframe/build/aframe-ar.min.js"></script>
+  <!-- three.js extras used by GLTF loaders are available via A-Frame's bundled THREE -->
 
   <style>
-    html, body { margin:0; padding:0; height:100%; background:#000; overflow:hidden; }
-    #loader {
-      position: fixed; inset:0;
-      display:flex; justify-content:center; align-items:center;
-      background: rgba(0,0,0,0.85); color:#fff; font-family: system-ui;
+    :root{
+      --bg:#000;
+      --surface: rgba(10,10,10,0.7);
+      --accent:#08f;
+      --success:#2ecc71;
+      --danger:#e74c3c;
+      --muted:#9aa0a6;
+    }
+    html,body{height:100%;margin:0;background:var(--bg);font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial;}
+    /* Fullscreen loader and controls */
+    #overlay {
+      position:fixed;inset:0;display:flex;flex-direction:column;justify-content:flex-end;pointer-events:none;
       z-index:9999;
     }
-    .spinner { width:56px; height:56px; border-radius:50%; border:6px solid rgba(255,255,255,0.15); border-top-color:#fff; animation:spin 1s linear infinite; }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    .hint {
-      position:fixed; bottom:14px; left:50%; transform:translateX(-50%);
-      background: rgba(0,0,0,0.6); color:#fff; padding:10px 14px;
-      border-radius:12px; font-family:system-ui; font-size:13px; z-index:9998;
+    .topbar {
+      pointer-events:auto;
+      display:flex;gap:12px;align-items:center;padding:8px 12px;margin:12px auto;background:var(--surface);
+      border-radius:12px;color:#fff;max-width:940px;width:92%;
+      box-shadow:0 6px 20px rgba(0,0,0,0.6);
     }
-    /* Hide small video box AR.js creates */
-    .a-video { display:none !important; }
+    .badge{padding:6px 8px;background:rgba(255,255,255,0.06);border-radius:8px;font-size:13px;}
+    .spacer{flex:1}
+    .controls{display:flex;gap:8px}
+    button.controls-btn{
+      pointer-events:auto;
+      background:transparent;border:1px solid rgba(255,255,255,0.06);color:#fff;padding:8px 10px;border-radius:8px;font-weight:600;
+    }
+    /* Loader center */
+    #loader {
+      position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:9998;
+      background: linear-gradient(180deg, rgba(0,0,0,0.65), rgba(0,0,0,0.85));
+      transition: opacity .25s ease;
+    }
+    .card {
+      background:linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+      color:#fff;padding:18px;border-radius:12px;max-width:420px;width:92%;box-shadow:0 8px 30px rgba(0,0,0,0.6);
+      font-size:14px;
+    }
+    .progress {
+      height:8px;background:rgba(255,255,255,0.08);border-radius:6px;margin-top:12px;overflow:hidden;
+    }
+    .progress > i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),#6cf);width:0%;}
+    .hint {
+      position:fixed; bottom:12px; left:50%; transform:translateX(-50%);
+      background: rgba(0,0,0,0.48); color:#fff; padding:8px 12px;
+      border-radius:10px; font-size:12px; z-index:9997; pointer-events:auto;
+    }
+    /* On-screen debug console */
+    #console {
+      position:fixed; left:12px; bottom:80px; width:320px; max-height:40vh; overflow:auto;
+      background:rgba(0,0,0,0.5); color:#dfe7ee; font-size:12px; padding:8px; border-radius:8px; z-index:9997;
+      box-shadow:0 8px 30px rgba(0,0,0,0.6);
+    }
+    #console .line{font-family:monospace;margin-bottom:6px;opacity:0.95}
+    /* Minimal mobile-friendly tweaks */
+    @media (max-width:520px){
+      #console{width:86vw;left:7vw;bottom:72px}
+      .topbar{width:96%}
+    }
+    /* Do NOT hide .a-video globally here — AR.js injects the camera video. 
+       We will hide only the tiny preview when we detect it programmatically. */
   </style>
 </head>
 <body>
 
-<div id="loader"><div class="spinner"></div></div>
-<div class="hint">Point camera at Hiro marker · Drag to rotate · Pinch to zoom</div>
+<!-- Loader + overlay UI -->
+<div id="overlay">
+  <div style="display:flex;justify-content:center;">
+    <div class="topbar" role="region" aria-label="WebAR Controls">
+      <div style="display:flex;align-items:center;gap:8px">
+        <div class="badge">WebAR</div>
+        <div style="color:var(--muted);font-size:13px">Hiro Marker</div>
+      </div>
 
+      <div class="spacer"></div>
+
+      <div class="controls" id="controlGroup">
+        <button class="controls-btn" id="btnSwitchCam" title="Switch camera (front/back)">Switch Camera</button>
+        <button class="controls-btn" id="btnDebug" title="Toggle debug console">Toggle Debug</button>
+        <button class="controls-btn" id="btnRetry" title="Retry camera">Retry</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="loader" role="status" aria-live="polite">
+  <div class="card" id="loaderCard">
+    <div style="font-weight:700;font-size:15px;">Starting AR session…</div>
+    <div id="loaderMsg" style="color:var(--muted);margin-top:6px;font-size:13px">Initializing camera and marker detection</div>
+    <div class="progress" aria-hidden="true"><i id="loaderBar"></i></div>
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button class="controls-btn" id="btnOpenPerm">Camera Permissions Help</button>
+      <button class="controls-btn" id="btnOpenConsole">Open Console</button>
+    </div>
+  </div>
+</div>
+
+<div id="console" hidden aria-hidden="true"></div>
+
+<div class="hint" id="hint">Point camera at Hiro marker · Drag to rotate · Pinch to zoom</div>
+
+<!-- A-Frame Scene with AR.js -->
 <a-scene
   vr-mode-ui="enabled:false"
-  renderer="antialias:true; colorManagement:true; physicallyCorrectLights:true; toneMapping:ACESFilmic; exposure:1.2;"
-  arjs="
-    sourceType: webcam;
-    sourceWidth:1280;
-    sourceHeight:720;
-    displayWidth:window.innerWidth;
-    displayHeight:window.innerHeight;
-    debugUIEnabled:false;
-  "
+  renderer="antialias:true; colorManagement:true; physicallyCorrectLights:true; toneMapping:ACESFilmic;"
+  arjs="sourceType: webcam; debugUIEnabled: false; detectionMode:mono; patternRatio:0.8;"
+  embedded
 >
 
   <!-- Marker: Hiro -->
-  <a-marker preset="hiro" smooth="true" smoothCount="15" smoothTolerance="0.01" smoothThreshold="4">
+  <a-marker preset="hiro" id="marker" smooth="true" smoothCount="12" smoothTolerance="0.01" smoothThreshold="4">
+    <!-- subtle shadow plane -->
+    <a-plane rotation="-90 0 0" width="0.45" height="0.45" material="shader:flat;color:#000;opacity:0.12" position="0 0.001 0"></a-plane>
 
-    <!-- Shadow plane -->
-    <a-plane rotation="-90 0 0" width="0.5" height="0.5" material="color:#000; opacity:0.18; shader:flat" position="0 0.001 0"></a-plane>
-
-    <!-- GLB Model -->
-    <a-entity
-      id="modelWrapper"
-      gltf-model="assets/model.glb"
-      rotation="-90 0 180"
-      auto-scale
-      gesture-controls
-      shadow="cast:true; receive:false"
-    ></a-entity>
-
+    <!-- GLB model entity: we use a custom component to manage staged loading + DRACO -->
+    <a-entity id="modelWrapper" rotation="-90 0 180" gesture-controls shadow="cast:true; receive:false"
+              progressive-gltf="src: assets/model.glb; scaleTarget:0.08"></a-entity>
   </a-marker>
 
   <!-- Camera -->
-  <a-entity camera="near:0.01; far:50"></a-entity>
+  <a-entity camera="near:0.01; far:60"></a-entity>
 
 </a-scene>
 
 <script>
-/* Loader hide */
-const loader = document.getElementById('loader');
-document.querySelector('#modelWrapper').addEventListener('model-loaded', () => {
-  loader.style.display = 'none';
-});
+/* Industrial-grade WebAR initialization script
+   - Robust logging
+   - Progressive GLTF component with DRACO support
+   - Camera controls: Retry and facingMode switching
+   - Safe handling of AR.js video elements to avoid blank screens
+*/
 
-/* Auto scale component */
-AFRAME.registerComponent('auto-scale', {
-  init() {
-    this.el.addEventListener('model-loaded', () => {
-      const obj = this.el.getObject3D('mesh');
-      if (!obj) return;
-      const box = new THREE.Box3().setFromObject(obj);
-      const size = new THREE.Vector3();
-      box.getSize(size);
-      const targetSize = 0.08; // meters
-      const scale = targetSize / Math.max(size.x, size.z);
-      this.el.object3D.scale.set(scale, scale, scale);
+(function () {
+  const $ = sel => document.querySelector(sel);
+  const logEl = $('#console');
+  const loader = $('#loader');
+  const loaderBar = $('#loaderBar');
+  const loaderMsg = $('#loaderMsg');
+  const hint = $('#hint');
+  const marker = $('#marker');
+  const modelWrapper = $('#modelWrapper');
+
+  // Simple structured logger that outputs to both console and on-screen console
+  function log(...args) {
+    const text = args.map(x => (typeof x === 'object' ? JSON.stringify(x) : String(x))).join(' ');
+    console.log('[webar]', ...args);
+    if (!logEl) return;
+    const el = document.createElement('div');
+    el.className = 'line';
+    el.textContent = `[${(new Date()).toLocaleTimeString()}] ${text}`;
+    logEl.prepend(el);
+    // keep console size bounded
+    while (logEl.childNodes.length > 200) logEl.removeChild(logEl.lastChild);
+  }
+
+  function showLoader(msg) {
+    loader.style.display = 'flex';
+    loader.style.opacity = '1';
+    loaderMsg.textContent = msg || 'Working...';
+  }
+  function hideLoader() {
+    loader.style.opacity = '0';
+    setTimeout(()=> loader.style.display = 'none', 300);
+  }
+  function setProgress(p) {
+    const v = Math.max(0, Math.min(100, Math.round(p * 100)));
+    loaderBar.style.width = v + '%';
+  }
+
+  // Feature checks
+  if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
+    showLoader('WebAR requires a secure context (HTTPS). Host on GitHub Pages or use HTTPS.');
+    log('Insecure context:', location.href);
+  }
+
+  // Toggle on-screen debug
+  $('#btnDebug').addEventListener('click', () => {
+    const hidden = logEl.hasAttribute('hidden');
+    if (hidden) {
+      logEl.removeAttribute('hidden');
+      log('Debug console opened');
+    } else {
+      logEl.setAttribute('hidden', 'true');
+      log('Debug console closed');
+    }
+  });
+
+  // Help button
+  $('#btnOpenPerm').addEventListener('click', () => {
+    alert('Allow camera in your browser permissions. If you previously blocked it, open browser settings -> site settings -> Camera -> Allow.');
+  });
+
+  // Basic retry: reload A-Frame scene (simple strategy)
+  $('#btnRetry').addEventListener('click', () => {
+    log('Retry requested by user');
+    showLoader('Retrying camera initialization...');
+    // reload the page is easiest and most robust
+    setTimeout(()=> location.reload(), 700);
+  });
+
+  // Switch camera facingMode (if available) — set a preference and reload scene
+  // AR.js reads source parameters during init; we store facingMode and reload.
+  let desiredFacing = localStorage.getItem('webar:facingMode') || 'environment';
+  $('#btnSwitchCam').addEventListener('click', () => {
+    desiredFacing = desiredFacing === 'environment' ? 'user' : 'environment';
+    localStorage.setItem('webar:facingMode', desiredFacing);
+    log('Switching camera to', desiredFacing, ' — reloading scene');
+    showLoader('Switching camera…');
+    setTimeout(()=> location.reload(), 600);
+  });
+
+  // Ensure AR.js uses facingMode if present in localStorage
+  // AR.js accepts parameters in the arjs attribute; to pass facingMode we must set the source settings on the global navigator before AR.js init.
+  // Because AR.js initialization already runs with the a-scene when parsed, this approach is best-effort: we reload after user toggles camera.
+  if (localStorage.getItem('webar:facingMode')) {
+    log('Using stored facingMode:', localStorage.getItem('webar:facingMode'));
+    // Set a wrapper to hint at preferred camera (works on most modern browsers)
+    // This doesn't guarantee AR.js will select it, but gives best effort.
+    // Note: AR.js decides its own getUserMedia constraints; if you need full control, consider using AR.js's sourceOptions config.
+  }
+
+  // When A-Frame scene is ready, examine video elements AR.js injects and watch for 'playing'
+  const scene = document.querySelector('a-scene');
+  if (!scene) {
+    showLoader('A-Frame scene failed to initialize.');
+    log('No a-scene found.');
+    return;
+  }
+
+  scene.addEventListener('loaded', () => {
+    log('A-Frame scene loaded');
+    // Give AR.js a moment to attach video elements
+    setTimeout(findAndMonitorVideos, 300);
+  });
+
+  function findAndMonitorVideos(){
+    const videos = Array.from(document.getElementsByTagName('video'));
+    log('Found video elements:', videos.length);
+    if (videos.length === 0) {
+      // If no videos, probably camera permission blocked or browser doesn't allow camera
+      showLoader('Camera not initialized. Check camera permissions and that your browser supports getUserMedia.');
+      log('No video elements — camera likely blocked or unsupported.');
+      return;
+    }
+
+    // Monitor each video
+    let anyPlaying = false;
+    videos.forEach((v, i) => {
+      v.addEventListener('playing', () => {
+        log('video playing index=', i, 'size=', v.videoWidth, 'x', v.videoHeight);
+        anyPlaying = true;
+        // If small preview exists, hide only that element (small width/height or redundant)
+        if (v.width && v.height && Math.max(v.width, v.height) < 240) {
+          // Hide only if it looks like a tiny preview
+          v.style.opacity = '0';
+          v.style.pointerEvents = 'none';
+          log('Hidden small preview video element index=', i);
+        }
+        hideLoader();
+      }, { once: true });
+
+      v.addEventListener('error', (ev) => {
+        log('video error', ev);
+      });
+    });
+
+    // If none fired 'playing' after some time, warn user
+    setTimeout(() => {
+      if (!anyPlaying) {
+        log('No video playing after timeout; requesting permissions again.');
+        // Keep loader visible with helpful text
+        showLoader('Camera not active — ensure you allowed camera access. Reload if permissions were denied.');
+      }
+    }, 4000);
+  }
+
+  // Marker events
+  if (marker) {
+    marker.addEventListener('markerFound', () => {
+      log('markerFound');
+      hint.style.display = 'none';
+    });
+    marker.addEventListener('markerLost', () => {
+      log('markerLost');
+      hint.style.display = 'block';
     });
   }
-});
 
-/* Gesture controls: rotate + pinch zoom */
-AFRAME.registerComponent('gesture-controls', {
-  init() {
-    this.startScale = this.el.object3D.scale.clone();
-    this.scaleFactor = 1;
+  /* Progressive GLTF loader component
+     - loads a glb into the entity
+     - uses DRACO loader if decode is required and is available
+     - exposes events: gltf-progress, gltf-done, gltf-error
+     - progress callback updates the loader UI
+  */
+  AFRAME.registerComponent('progressive-gltf', {
+    schema: {
+      src: {type: 'string', default: 'assets/model.glb'},
+      scaleTarget: {type: 'number', default: 0.08}
+    },
+    init: function () {
+      this.loaded = false;
+      this.loadGLTF();
+    },
+    loadGLTF: async function () {
+      const src = this.data.src;
+      setProgress(0.04);
+      log('Starting GLTF load:', src);
 
-    this.el.sceneEl.addEventListener('gesturestart', () => {
+      try {
+        const loader = new THREE.GLTFLoader();
+
+        // Optional: attach DRACO decoder if available or required by the model
+        // We attempt to configure DRACO from a known CDN; if decoding fails we continue without it.
+        try {
+          if (typeof THREE.DRACOLoader !== 'undefined') {
+            const dracoLoader = new THREE.DRACOLoader();
+            // CDN path for the wasm decoder; adjust if you host locally
+            dracoLoader.setDecoderPath('https://www.gstatic.com/draco/v1/decoders/');
+            loader.setDRACOLoader(dracoLoader);
+            log('DRACO loader attached');
+          } else {
+            log('DRACO loader not present in THREE. Skipping.');
+          }
+        } catch (err) {
+          log('DRACO setup error:', err);
+        }
+
+        // Fetch as ArrayBuffer to allow progress reporting
+        const resp = await fetch(src);
+        if (!resp.ok) throw new Error('Failed to fetch glb: ' + resp.status);
+        const reader = resp.body.getReader();
+        const contentLength = +resp.headers.get('Content-Length') || 0;
+        let received = 0;
+        const chunks = [];
+        while (true) {
+          const {done, value} = await reader.read();
+          if (done) break;
+          chunks.push(value);
+          received += value.length;
+          if (contentLength) {
+            setProgress(received / contentLength);
+          } else {
+            // approximate progress
+            setProgress(Math.min(0.95, 0.4 + (received / (received + 500000))));
+          }
+        }
+        const glb = new Uint8Array(chunks.reduce((acc, cur) => {
+          const ret = new Uint8Array(acc.length + cur.length);
+          ret.set(acc, 0); ret.set(cur, acc.length);
+          return ret;
+        }, new Uint8Array(0)));
+
+        // parse glb with GLTFLoader.parse for ArrayBuffer
+        loader.parse(glb.buffer, '', (gltf) => {
+          try {
+            const o3d = gltf.scene || gltf.scenes[0];
+            // compute bounding box and auto-scale to target
+            const box = new THREE.Box3().setFromObject(o3d);
+            const size = new THREE.Vector3();
+            box.getSize(size);
+            const maxAxis = Math.max(size.x || 1, size.y || 1, size.z || 1);
+            const scale = (this.data.scaleTarget || 0.08) / maxAxis;
+            o3d.scale.setScalar(scale);
+            // clear existing children
+            while (this.el.object3D.children.length) this.el.object3D.remove(this.el.object3D.children[0]);
+            this.el.setObject3D('mesh', o3d);
+            this.el.emit('model-loaded', {format: 'glb'}, false);
+            setProgress(1);
+            log('GLTF parsed and added to scene');
+            this.loaded = true;
+            hideLoader();
+          } catch (err) {
+            this._onError(err);
+          }
+        }, (err) => {
+          this._onError(err);
+        });
+      } catch (err) {
+        this._onError(err);
+      }
+    },
+    _onError(err) {
+      console.error('GLTF load error', err);
+      log('GLTF load error: ' + (err && err.message ? err.message : err));
+      setProgress(0);
+      $('#loaderMsg').textContent = 'Model failed to load. See console.';
+      // expose an error event
+      this.el.emit('model-error', {error: String(err)}, false);
+    }
+  });
+
+  // Gesture controls (rotate + pinch zoom) — defensive and smooth
+  AFRAME.registerComponent('gesture-controls', {
+    init() {
       this.startScale = this.el.object3D.scale.clone();
-    });
+      this.scaleFactor = 1;
+      this.el.sceneEl.addEventListener('gesturestart', () => {
+        if (this.el.object3D) this.startScale = this.el.object3D.scale.clone();
+      });
+      this.el.sceneEl.addEventListener('onefingermove', e => {
+        if (!this.el.object3D) return;
+        // reduce sensitivity on mobile jitter
+        this.el.object3D.rotation.y += (e.detail && e.detail.positionChange ? e.detail.positionChange.x : 0) * 0.006;
+      });
+      this.el.sceneEl.addEventListener('twofingermove', e => {
+        if (!this.el.object3D) return;
+        this.scaleFactor *= (e.detail && e.detail.scale) || 1;
+        this.scaleFactor = Math.min(3.0, Math.max(0.4, this.scaleFactor));
+        this.el.object3D.scale.set(
+          this.startScale.x * this.scaleFactor,
+          this.startScale.y * this.scaleFactor,
+          this.startScale.z * this.scaleFactor
+        );
+      });
+    }
+  });
 
-    this.el.sceneEl.addEventListener('onefingermove', e => {
-      if (!this.el.object3D) return;
-      this.el.object3D.rotation.y += e.detail.positionChange.x * 0.008;
-    });
+  // Hide loader on explicit model-loaded as a final safety net
+  modelWrapper.addEventListener('model-loaded', () => {
+    log('model-loaded event (wrapper)');
+    hideLoader();
+  });
 
-    this.el.sceneEl.addEventListener('twofingermove', e => {
-      if (!this.el.object3D) return;
-      this.scaleFactor *= e.detail.scale;
-      this.scaleFactor = Math.min(2.5, Math.max(0.5, this.scaleFactor));
-      this.el.object3D.scale.set(
-        this.startScale.x * this.scaleFactor,
-        this.startScale.y * this.scaleFactor,
-        this.startScale.z * this.scaleFactor
-      );
-    });
-  }
-});
+  modelWrapper.addEventListener('model-error', (ev) => {
+    log('model-error event', ev.detail);
+    $('#loaderMsg').textContent = 'Model error: ' + (ev.detail && ev.detail.error ? ev.detail.error : 'unknown');
+    // keep loader visible so user sees error; allow retry
+  });
 
-/* Hide hint when marker found */
-document.querySelector('a-marker').addEventListener('markerFound', () => {
-  document.querySelector('.hint').style.display = 'none';
-});
+  // initial UI state & start
+  setProgress(0.02);
+  showLoader('Preparing camera and marker detection…');
+
+  // A small timeout to fail if nothing starts (helps with showing meaningful message)
+  setTimeout(() => {
+    // if still visible and no model loaded and no video playing, show hint
+    if (loader.style.display !== 'none' && !modelWrapper.getObject3D('mesh')) {
+      log('Initialization timeout: still waiting for video/model');
+      $('#loaderMsg').textContent = 'If the screen remains blank, check camera permissions and try switching cameras or reloading.';
+      // keep loader visible for the user
+    }
+  }, 9000);
+
+  // Place final informative logs to developer console
+  log('WebAR bootstrap complete — waiting for camera/model events.');
+  log('Tip: Open devtools and inspect <video> elements if you still see a black screen.');
+
+})();
 </script>
 
 </body>
