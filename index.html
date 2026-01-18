@@ -1,223 +1,103 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>Enterprise AR Pro — Stable Marker AR</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Enterprise Marker AR — Stable</title>
 
-  <!-- A-Frame + MindAR -->
-  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
-  <script src="https://raw.githack.com/fcor/aframe-gesture-handler/master/dist/aframe-gesture-handler.js"></script>
+<!-- A-Frame + MindAR -->
+<script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
 
-  <style>
-    html,body {
-      margin:0; padding:0;
-      width:100%; height:100%;
-      overflow:hidden;
-      background:black;
-      font-family:system-ui, -apple-system, Segoe UI, Roboto, Arial;
-    }
+<style>
+html, body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: black;
+}
 
-    /* Ensure FULLSCREEN camera + canvas */
-    a-scene, canvas, video {
-      position: fixed;
-      inset: 0;
-      width: 100vw;
-      height: 100vh;
-    }
+/* Fullscreen camera */
+a-scene, canvas, video {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+}
 
-    video {
-      object-fit: cover;
-      z-index: 1;
-      background: black;
-    }
-
-    canvas {
-      z-index: 2;
-      background: transparent !important;
-      pointer-events: none;
-    }
-
-    a-scene {
-      background: transparent !important;
-    }
-
-    /* Overlay UI */
-    #overlay {
-      position:fixed;
-      inset:0;
-      z-index:10;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      background:rgba(0,0,0,0.85);
-      color:white;
-    }
-
-    #overlay.hidden {
-      opacity:0;
-      pointer-events:none;
-      transition:opacity 0.4s ease;
-    }
-
-    .panel {
-      padding:20px;
-      border-radius:12px;
-      text-align:center;
-      max-width:320px;
-      background:rgba(255,255,255,0.05);
-    }
-
-    button {
-      margin-top:12px;
-      padding:10px 14px;
-      border-radius:10px;
-      border:0;
-      cursor:pointer;
-      font-size:14px;
-      background:#00f2ff;
-      color:#001;
-    }
-
-    /* Marker guide */
-    #guide {
-      position:fixed;
-      top:50%;
-      left:50%;
-      transform:translate(-50%,-50%);
-      width:70vw;
-      max-width:320px;
-      height:70vw;
-      max-height:320px;
-      border:2px dashed rgba(0,242,255,0.5);
-      border-radius:20px;
-      z-index:5;
-      display:none;
-      pointer-events:none;
-    }
-
-    #guide span {
-      position:absolute;
-      bottom:-36px;
-      width:100%;
-      text-align:center;
-      color:white;
-      font-size:13px;
-    }
-  </style>
+video {
+  object-fit: cover;
+}
+</style>
 </head>
 
 <body>
 
-<div id="overlay">
-  <div class="panel">
-    <h3>Enterprise AR Pro</h3>
-    <p id="status">Press start to enable camera</p>
-    <button id="startBtn">Start AR</button>
-  </div>
-</div>
-
-<div id="guide">
-  <span>Align the image inside the square</span>
-</div>
-
 <a-scene
-  id="scene"
-  mindar-image="imageTargetSrc: ./assets/targets.mind; autoStart:false; uiScanning:no; uiLoading:no; uiError:no"
-  renderer="alpha:true; antialias:true; physicallyCorrectLights:true"
-  vr-mode-ui="enabled:false"
-  device-orientation-permission-ui="enabled:false">
+  mindar-image="imageTargetSrc: assets/targets.mind; autoStart: true;"
+  renderer="alpha: true; antialias: true;"
+  vr-mode-ui="enabled: false"
+  device-orientation-permission-ui="enabled: false">
 
   <a-assets>
-    <a-asset-item id="model" src="./assets/model.glb"></a-asset-item>
+    <a-asset-item id="model" src="assets/model.glb"></a-asset-item>
   </a-assets>
 
-  <a-camera look-controls="enabled:false"></a-camera>
+  <!-- Camera controlled by MindAR -->
+  <a-camera position="0 0 0" look-controls="enabled:false"></a-camera>
 
-  <a-entity id="anchor" mindar-image-target="targetIndex:0">
+  <!-- Marker anchor -->
+  <a-entity mindar-image-target="targetIndex: 0">
+
+    <!-- MODEL (this is what we smooth) -->
     <a-gltf-model
-      id="gltf"
+      id="modelEntity"
       src="#model"
       scale="0.8 0.8 0.8"
       rotation="0 180 0"
-      visible="false"
-      gesture-handler="minScale:0.3; maxScale:3">
+      visible="false">
     </a-gltf-model>
 
-    <a-entity light="type:ambient; intensity:0.9"></a-entity>
-    <a-entity light="type:hemisphere; intensity:1.1"></a-entity>
-    <a-entity light="type:directional; intensity:1.2" position="1 2 1"></a-entity>
+    <!-- Lighting -->
+    <a-light type="ambient" intensity="0.9"></a-light>
+    <a-light type="directional" intensity="1.2" position="1 2 1"></a-light>
+
   </a-entity>
 </a-scene>
 
 <script>
-  const scene = document.querySelector('#scene');
-  const anchor = document.querySelector('#anchor');
-  const model = document.querySelector('#gltf');
-  const overlay = document.querySelector('#overlay');
-  const guide = document.querySelector('#guide');
-  const status = document.querySelector('#status');
-  const startBtn = document.querySelector('#startBtn');
+AFRAME.registerComponent("smooth-follow", {
+  schema: { factor: { default: 0.25 } },
 
-  let fade = 0;
-  let smoothing = 0.25; // jitter control (0.15–0.35)
+  init() {
+    this.pos = new THREE.Vector3();
+    this.quat = new THREE.Quaternion();
+  },
 
-  const smoothPos = new THREE.Vector3();
-  const smoothQuat = new THREE.Quaternion();
+  tick() {
+    const parent = this.el.object3D.parent;
+    if (!parent) return;
 
-  async function startAR() {
-    status.textContent = 'Starting camera...';
+    this.pos.lerp(parent.position, this.data.factor);
+    this.quat.slerp(parent.quaternion, this.data.factor);
 
-    try {
-      await navigator.mediaDevices.getUserMedia({ video:true })
-        .then(s => s.getTracks().forEach(t => t.stop()));
-    } catch {}
-
-    const arSystem = scene.systems['mindar-image-system'];
-    await arSystem.start();
-
-    overlay.classList.add('hidden');
-    guide.style.display = 'block';
+    this.el.object3D.position.copy(this.pos);
+    this.el.object3D.quaternion.copy(this.quat);
   }
+});
 
-  startBtn.onclick = startAR;
+const model = document.querySelector("#modelEntity");
+const anchor = model.parentElement;
 
-  anchor.addEventListener('targetFound', () => {
-    model.setAttribute('visible', 'true');
-    guide.style.display = 'none';
-  });
+anchor.addEventListener("targetFound", () => {
+  model.setAttribute("visible", true);
+  model.setAttribute("smooth-follow", "");
+});
 
-  anchor.addEventListener('targetLost', () => {
-    model.setAttribute('visible', 'false');
-    guide.style.display = 'block';
-  });
-
-  scene.addEventListener('renderstart', () => {
-    scene.renderer.setAnimationLoop(() => {
-      if (!anchor.object3D) return;
-
-      /* ---- POSE SMOOTHING (anti-jitter) ---- */
-      smoothPos.lerp(anchor.object3D.position, smoothing);
-      anchor.object3D.position.copy(smoothPos);
-
-      smoothQuat.slerp(anchor.object3D.quaternion, smoothing);
-      anchor.object3D.quaternion.copy(smoothQuat);
-
-      /* ---- GHOST / FADE MODE ---- */
-      fade += model.getAttribute('visible') ? 0.08 : -0.08;
-      fade = Math.min(1, Math.max(0, fade));
-
-      model.object3D.traverse(o => {
-        if (o.material) {
-          o.material.transparent = true;
-          o.material.opacity = fade;
-        }
-      });
-
-      scene.renderer.render(scene.object3D, scene.camera);
-    });
-  });
+anchor.addEventListener("targetLost", () => {
+  model.setAttribute("visible", false);
+});
 </script>
 
 </body>
