@@ -5,18 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Enterprise AR | 2026</title>
     
-    <!-- PRELOAD: This starts the download before the script even runs, fixing the 30-sec lag -->
-    <link rel="preload" href="./assets/model.glb" as="fetch" crossorigin>
-    <link rel="preload" href="./assets/targets.mind" as="fetch" crossorigin>
-
-    <!-- LOCAL SCRIPTS: Much faster than CDN -->
-    <script src="./assets/aframe.min.js"></script>
-    <script src="./assets/mindar-image.prod.js"></script>
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
 
     <style>
         body { margin: 0; overflow: hidden; background: #000; }
         
-        /* Premium Loading UI */
+        /* UI Overlay */
         #ui-overlay {
             position: fixed; inset: 0; z-index: 999;
             background: #111; display: flex; flex-direction: column;
@@ -49,35 +44,26 @@
 
     <div id="guide"></div>
 
-    <!-- 
-        OPTIMIZED A-SCENE SETTINGS:
-        - filterMinCF/filterBeta: Adjusted for a balance of speed and stability.
-        - maxTrackRate/warmupTolerance: Prioritize fast recognition time (fixes laptop screen lag).
-    -->
     <a-scene 
         mindar-image="
             imageTargetSrc: ./assets/targets.mind; 
-            filterMinCF:0.1; filterBeta: 0.1; 
-            warmupTolerance: 2; maxTrackRate: 30;
-            missTolerance: 5;
+            filterMinCF:0.0001; filterBeta: 0.001; 
+            warmupTolerance: 5; maxTrackRate: 30;
+            missTolerance: 10;
         " 
         embedded color-management="true" 
-        renderer="antialias: true; colorManagement: true; physicallyCorrectLights: true; logarithmicDepthBuffer: true;"
+        renderer="antialias: true; physicallyCorrectLights: true; colorManagement: true;"
         vr-mode-ui="enabled: false"
         device-orientation-permission-ui="enabled: false">
 
         <a-assets>
             <a-asset-item id="myModel" src="./assets/model.glb"></a-asset-item>
-            <!-- HDRI Reflection Map FIX: Use the full URL to the image file -->
-            <img id="env" src="https://cdn.jsdelivr.net">
         </a-assets>
 
         <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
-        <!-- FIX: Re-added the required target container with the ID "target" -->
-         
+        <a-entity mindar-image-target="targetIndex: 0" id="target">
             
-            <!-- Subtle Shadow for realism -->
             <a-circle color="#000" radius="0.3" opacity="0.4" rotation="-90 0 0" position="0 -0.05 0"></a-circle>
 
             <a-gltf-model 
@@ -88,9 +74,10 @@
                 class="ar-model">
             </a-gltf-model>
 
-            <!-- Dual-Source Lighting -->
             <a-light type="directional" intensity="1.2" position="-1 2 1"></a-light>
             <a-light type="directional" color="#00f2ff" intensity="0.4" position="1 1 1"></a-light>
+        
+        </a-entity>
         
     </a-scene>
 
@@ -98,32 +85,33 @@
         const scene = document.querySelector('a-scene');
         const overlay = document.querySelector('#ui-overlay');
         const guide = document.querySelector('#guide');
-        const target = document.querySelector('#target');
+        // This will now work because we added id="target" back to the HTML
+        const target = document.querySelector('#target'); 
 
-        // Close loading screen when camera & engine are hot
+        // 1. Scene Ready: Hide the loading spinner
         scene.addEventListener("arReady", () => {
+            console.log("AR Engine Ready");
             overlay.classList.add('hidden');
             guide.style.display = "block";
         });
 
-        // UI Logic for target discovery
-        target.addEventListener("targetFound", () => guide.style.display = "none");
-        target.addEventListener("targetLost", () => guide.style.display = "block");
-
-        // Advanced Environment Mapping (Reflection Logic)
-        scene.addEventListener('model-loaded', (e) => {
-            const mesh = e.target.getObject3D('mesh');
-            const texture = new THREE.TextureLoader().load(document.querySelector('#env').src);
-            texture.mapping = THREE.EquirectangularReflectionMapping;
-            
-            mesh.traverse((node) => {
-                if (node.isMesh) {
-                    node.material.envMap = texture;
-                    node.material.envMapIntensity = 1.2;
-                    node.material.needsUpdate = true;
-                }
-            });
+        // 2. Error Handling
+        scene.addEventListener("arError", (event) => {
+            console.log("AR Error:", event);
+            overlay.innerHTML = "<p style='color:red'>CAMERA ERROR</p>";
         });
+
+        // 3. Target Found/Lost Logic
+        if (target) {
+            target.addEventListener("targetFound", () => {
+                console.log("Target Found");
+                guide.style.display = "none";
+            });
+            target.addEventListener("targetLost", () => {
+                console.log("Target Lost");
+                guide.style.display = "block";
+            });
+        }
     </script>
 </body>
 </html>
