@@ -5,26 +5,31 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>SkyLabs AR</title>
 
-    <!-- A-Frame FIRST then MindAR — order is critical -->
+    <!-- A-Frame FIRST, MindAR second — order is critical -->
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
 
     <style>
-      *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+      *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
 
       html, body {
-        width: 100%; height: 100%;
-        overflow: hidden;
-        background: #000;
-        font-family: 'Segoe UI', system-ui, sans-serif;
+        width:100%; height:100%;
+        overflow:hidden;
+        background:#000;
+        font-family:'Segoe UI', system-ui, sans-serif;
+        touch-action: none;
       }
 
-      /* ── CAMERA FEED FIX ──────────────────────────────────
-         MindAR injects a <video> and a canvas for the camera.
-         We must force them visible and behind the AR canvas.
-      ──────────────────────────────────────────────────── */
+      /* ╔══════════════════════════════════════════╗
+         ║   CAMERA FEED — most critical CSS block  ║
+         ╚══════════════════════════════════════════╝
+         MindAR renders camera into a <video> AND
+         a compositing <canvas>. Both must be below
+         the A-Frame canvas (z-index 1) and visible. */
+
       video {
         position: fixed !important;
         top: 0 !important; left: 0 !important;
@@ -34,169 +39,243 @@
         display: block !important;
         visibility: visible !important;
         opacity: 1 !important;
+        pointer-events: none !important;
       }
 
-      /* MindAR injects its own container — force it visible too */
-      .mindar-ui-overlay { display: none !important; }
+      /* MindAR wrapper — keep it full screen, behind AR */
+      #mindar-ar-container,
+      .mindar-ar-container {
+        position: fixed !important;
+        top:0 !important; left:0 !important;
+        width:100vw !important; height:100vh !important;
+        z-index: 1 !important;
+      }
 
-      /* A-Frame canvas sits on top of video, transparent background */
+      /* Hide MindAR's own UI overlays (we have our own) */
+      .mindar-ui-overlay,
+      .mindar-ui-scanning { display: none !important; }
+
+      /* A-Frame scene — transparent so video shows through */
       a-scene {
         position: fixed !important;
-        top: 0 !important; left: 0 !important;
-        width: 100vw !important; height: 100vh !important;
+        top:0 !important; left:0 !important;
+        width:100vw !important; height:100vh !important;
         z-index: 2 !important;
         background: transparent !important;
       }
 
-      canvas {
+      /* A-Frame canvas — must be transparent */
+      canvas.a-canvas {
         background: transparent !important;
+        position: fixed !important;
+        top:0 !important; left:0 !important;
+        width:100vw !important; height:100vh !important;
+        z-index: 2 !important;
       }
 
-      /* UI sits on top of everything */
+      /* Our UI always on top */
       #ui {
-        position: fixed; inset: 0;
+        position: fixed; inset:0;
         z-index: 100;
         pointer-events: none;
       }
 
       /* ── Loading Screen ── */
       #loading-screen {
-        position: fixed; inset: 0;
+        position: fixed; inset:0;
         background: #050505;
         display: flex; flex-direction: column;
         align-items: center; justify-content: center;
         z-index: 9999; gap: 1.2rem;
         transition: opacity 0.7s ease;
       }
-      #loading-screen.fade-out { opacity: 0; pointer-events: none; }
+      #loading-screen.fade-out { opacity:0; pointer-events:none; }
 
       .brand-title {
-        font-size: 1.5rem; font-weight: 800;
-        letter-spacing: 0.35em; text-transform: uppercase; color: #fff;
+        font-size:1.5rem; font-weight:800;
+        letter-spacing:0.35em; text-transform:uppercase; color:#fff;
       }
-      .brand-title span { color: #00d4ff; }
+      .brand-title span { color:#00d4ff; }
 
       .spinner {
-        width: 42px; height: 42px;
-        border: 3px solid rgba(255,255,255,0.08);
-        border-top-color: #00d4ff;
-        border-radius: 50%;
-        animation: spin 0.75s linear infinite;
+        width:42px; height:42px;
+        border:3px solid rgba(255,255,255,0.08);
+        border-top-color:#00d4ff;
+        border-radius:50%;
+        animation:spin 0.75s linear infinite;
       }
-      @keyframes spin { to { transform: rotate(360deg); } }
+      @keyframes spin { to { transform:rotate(360deg); } }
 
       .loading-label {
-        font-size: 0.72rem; letter-spacing: 0.15em;
-        text-transform: uppercase; color: rgba(255,255,255,0.35);
+        font-size:0.72rem; letter-spacing:0.15em;
+        text-transform:uppercase; color:rgba(255,255,255,0.35);
       }
 
       /* ── Error Screen ── */
       #error-screen {
-        display: none; position: fixed; inset: 0;
-        background: #050505; z-index: 9998;
-        flex-direction: column; align-items: center;
-        justify-content: center; gap: 1rem;
-        padding: 2rem; text-align: center;
+        display:none; position:fixed; inset:0;
+        background:#050505; z-index:9998;
+        flex-direction:column; align-items:center;
+        justify-content:center; gap:1rem;
+        padding:2rem; text-align:center;
       }
-      #error-screen.visible { display: flex; }
-      .error-icon { font-size: 2.5rem; }
-      .error-title { font-size: 1rem; font-weight: 700; color: #fff; }
-      .error-msg { font-size: 0.78rem; color: rgba(255,255,255,0.45); line-height: 1.6; max-width: 280px; }
+      #error-screen.visible { display:flex; }
+      .error-icon { font-size:2.5rem; }
+      .error-title { font-size:1rem; font-weight:700; color:#fff; }
+      .error-msg {
+        font-size:0.78rem; color:rgba(255,255,255,0.45);
+        line-height:1.6; max-width:280px;
+      }
       .error-btn {
-        margin-top: 0.5rem; background: #00d4ff; color: #000;
-        font-size: 0.75rem; font-weight: 700; letter-spacing: 0.1em;
-        text-transform: uppercase; padding: 0.65rem 1.6rem;
-        border-radius: 999px; border: none; cursor: pointer;
+        margin-top:0.5rem; background:#00d4ff; color:#000;
+        font-size:0.75rem; font-weight:700; letter-spacing:0.1em;
+        text-transform:uppercase; padding:0.65rem 1.6rem;
+        border-radius:999px; border:none; cursor:pointer;
       }
 
       /* ── Top Bar ── */
       .top-bar {
-        position: absolute; top: 0; left: 0; right: 0;
-        padding: 12px 1.2rem 1rem;
-        display: flex; align-items: center; justify-content: space-between;
-        background: linear-gradient(180deg, rgba(0,0,0,0.6) 0%, transparent 100%);
+        position:absolute; top:0; left:0; right:0;
+        padding:12px 1.2rem 1rem;
+        display:flex; align-items:center; justify-content:space-between;
+        background:linear-gradient(180deg,rgba(0,0,0,0.65) 0%,transparent 100%);
       }
-      .brand { font-size: 0.95rem; font-weight: 800; letter-spacing: 0.25em; text-transform: uppercase; color: #fff; }
-      .brand span { color: #00d4ff; }
-      .status { display: flex; align-items: center; gap: 0.5rem; }
+      .brand {
+        font-size:0.95rem; font-weight:800;
+        letter-spacing:0.25em; text-transform:uppercase; color:#fff;
+      }
+      .brand span { color:#00d4ff; }
+      .status { display:flex; align-items:center; gap:0.5rem; }
       .status-dot {
-        width: 9px; height: 9px; border-radius: 50%;
-        background: #ff3b3b; box-shadow: 0 0 8px #ff3b3b;
-        transition: background 0.35s, box-shadow 0.35s;
+        width:9px; height:9px; border-radius:50%;
+        background:#ff3b3b; box-shadow:0 0 8px #ff3b3b;
+        transition:background 0.35s, box-shadow 0.35s;
       }
-      .status-dot.found { background: #00ff88; box-shadow: 0 0 8px #00ff88; }
-      .status-label { font-size: 0.65rem; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(255,255,255,0.5); }
+      .status-dot.found { background:#00ff88; box-shadow:0 0 8px #00ff88; }
+      .status-label {
+        font-size:0.65rem; letter-spacing:0.12em;
+        text-transform:uppercase; color:rgba(255,255,255,0.5);
+      }
+
+      /* ── Gesture Hint Toast ── */
+      #gesture-toast {
+        position:absolute; top:5rem; left:50%;
+        transform:translateX(-50%);
+        background:rgba(0,0,0,0.6);
+        border:1px solid rgba(0,212,255,0.25);
+        backdrop-filter:blur(10px);
+        border-radius:999px; padding:0.45rem 1rem;
+        color:rgba(255,255,255,0.65); font-size:0.68rem;
+        letter-spacing:0.08em; white-space:nowrap;
+        opacity:0; transition:opacity 0.4s;
+        pointer-events:none;
+      }
+      #gesture-toast.show { opacity:1; }
 
       /* ── Scan Frame ── */
       .scan-frame {
-        position: absolute; top: 50%; left: 50%;
-        transform: translate(-50%, -52%);
-        width: min(68vw, 260px); height: min(68vw, 260px);
+        position:absolute; top:50%; left:50%;
+        transform:translate(-50%,-52%);
+        width:min(68vw,260px); height:min(68vw,260px);
+        transition:opacity 0.4s;
       }
+      .scan-frame.hidden { opacity:0; }
+
       .corner {
-        position: absolute; width: 24px; height: 24px;
-        border-color: rgba(0,212,255,0.65); border-style: solid;
-        transition: border-color 0.3s, width 0.3s, height 0.3s;
+        position:absolute; width:24px; height:24px;
+        border-color:rgba(0,212,255,0.65); border-style:solid;
+        transition:border-color 0.3s, width 0.3s, height 0.3s;
       }
-      .corner.tl { top:0; left:0; border-width: 2.5px 0 0 2.5px; }
-      .corner.tr { top:0; right:0; border-width: 2.5px 2.5px 0 0; }
-      .corner.bl { bottom:0; left:0; border-width: 0 0 2.5px 2.5px; }
-      .corner.br { bottom:0; right:0; border-width: 0 2.5px 2.5px 0; }
-      .scan-frame.found .corner { border-color: #00ff88; width: 30px; height: 30px; }
+      .corner.tl { top:0;    left:0;  border-width:2.5px 0 0 2.5px; }
+      .corner.tr { top:0;    right:0; border-width:2.5px 2.5px 0 0; }
+      .corner.bl { bottom:0; left:0;  border-width:0 0 2.5px 2.5px; }
+      .corner.br { bottom:0; right:0; border-width:0 2.5px 2.5px 0; }
+      .scan-frame.found .corner { border-color:#00ff88; width:30px; height:30px; }
 
       .scan-line {
-        position: absolute; left: 4px; right: 4px; height: 1.5px;
-        background: linear-gradient(90deg, transparent, #00d4ff, transparent);
-        animation: scanline 2.2s ease-in-out infinite; opacity: 0.7;
+        position:absolute; left:4px; right:4px; height:1.5px;
+        background:linear-gradient(90deg,transparent,#00d4ff,transparent);
+        animation:scanline 2.2s ease-in-out infinite; opacity:0.7;
       }
       @keyframes scanline {
-        0%   { top: 4px; opacity: 0; }
-        10%  { opacity: 0.7; }
-        90%  { opacity: 0.7; }
-        100% { top: calc(100% - 4px); opacity: 0; }
+        0%   { top:4px; opacity:0; }
+        10%  { opacity:0.7; }
+        90%  { opacity:0.7; }
+        100% { top:calc(100% - 4px); opacity:0; }
       }
-      .scan-frame.found .scan-line { display: none; }
+      .scan-frame.found .scan-line { display:none; }
 
-      /* ── Hint ── */
+      /* ── Hint pill ── */
       .hint {
-        position: absolute; bottom: 7.5rem; left: 50%;
-        transform: translateX(-50%);
-        background: rgba(0,0,0,0.55);
-        border: 1px solid rgba(255,255,255,0.1);
-        backdrop-filter: blur(10px);
-        border-radius: 999px; padding: 0.55rem 1.3rem;
-        color: rgba(255,255,255,0.7); font-size: 0.74rem;
-        letter-spacing: 0.06em; white-space: nowrap;
-        animation: pulse 2.5s ease-in-out infinite;
-        transition: opacity 0.4s;
+        position:absolute; bottom:7.5rem; left:50%;
+        transform:translateX(-50%);
+        background:rgba(0,0,0,0.55);
+        border:1px solid rgba(255,255,255,0.1);
+        backdrop-filter:blur(10px);
+        border-radius:999px; padding:0.55rem 1.3rem;
+        color:rgba(255,255,255,0.7); font-size:0.74rem;
+        letter-spacing:0.06em; white-space:nowrap;
+        animation:pulse 2.5s ease-in-out infinite;
+        transition:opacity 0.4s;
       }
-      .hint.hidden { opacity: 0; }
+      .hint.hidden { opacity:0; pointer-events:none; }
       @keyframes pulse { 0%,100%{opacity:0.7} 50%{opacity:1} }
+
+      /* ── Gesture Guide (shown on target found) ── */
+      #gesture-guide {
+        position:absolute; bottom:7.5rem; left:50%;
+        transform:translateX(-50%);
+        display:flex; gap:1rem;
+        opacity:0; transition:opacity 0.5s;
+        pointer-events:none;
+      }
+      #gesture-guide.show { opacity:1; }
+      .gesture-item {
+        display:flex; flex-direction:column;
+        align-items:center; gap:0.3rem;
+      }
+      .gesture-icon {
+        font-size:1.2rem;
+        background:rgba(0,0,0,0.5);
+        border:1px solid rgba(255,255,255,0.1);
+        backdrop-filter:blur(8px);
+        border-radius:50%; width:38px; height:38px;
+        display:flex; align-items:center; justify-content:center;
+      }
+      .gesture-label {
+        font-size:0.55rem; letter-spacing:0.1em;
+        text-transform:uppercase; color:rgba(255,255,255,0.4);
+      }
 
       /* ── Bottom Bar ── */
       .bottom-bar {
-        position: absolute; bottom: 0; left: 0; right: 0;
-        padding: 1rem 1.5rem 1.4rem;
-        display: flex; justify-content: center; gap: 0.75rem;
-        background: linear-gradient(0deg, rgba(0,0,0,0.55) 0%, transparent 100%);
-        pointer-events: all;
+        position:absolute; bottom:0; left:0; right:0;
+        padding:1rem 1.5rem 1.4rem;
+        display:flex; justify-content:center; gap:0.75rem;
+        background:linear-gradient(0deg,rgba(0,0,0,0.55) 0%,transparent 100%);
+        pointer-events:all;
       }
       .btn {
-        background: rgba(255,255,255,0.08);
-        border: 1px solid rgba(255,255,255,0.15);
-        color: rgba(255,255,255,0.85);
-        font-size: 0.7rem; font-weight: 600;
-        letter-spacing: 0.12em; text-transform: uppercase;
-        padding: 0.55rem 1.1rem; border-radius: 999px;
-        cursor: pointer; backdrop-filter: blur(8px);
-        -webkit-tap-highlight-color: transparent;
-        transition: background 0.2s, border-color 0.2s, transform 0.1s;
-        user-select: none;
+        background:rgba(255,255,255,0.08);
+        border:1px solid rgba(255,255,255,0.15);
+        color:rgba(255,255,255,0.85);
+        font-size:0.7rem; font-weight:600;
+        letter-spacing:0.12em; text-transform:uppercase;
+        padding:0.55rem 1.1rem; border-radius:999px;
+        cursor:pointer; backdrop-filter:blur(8px);
+        -webkit-tap-highlight-color:transparent;
+        transition:background 0.2s, border-color 0.2s, transform 0.1s;
+        user-select:none;
       }
       .btn:active {
-        background: rgba(0,212,255,0.18);
-        border-color: rgba(0,212,255,0.45);
-        transform: scale(0.96);
+        background:rgba(0,212,255,0.18);
+        border-color:rgba(0,212,255,0.45);
+        transform:scale(0.96);
+      }
+      .btn.active-toggle {
+        background:rgba(0,212,255,0.2);
+        border-color:rgba(0,212,255,0.5);
+        color:#00d4ff;
       }
     </style>
   </head>
@@ -207,7 +286,7 @@
     <div id="loading-screen">
       <div class="brand-title">Sky<span>Labs</span> AR</div>
       <div class="spinner"></div>
-      <p class="loading-label">Starting camera…</p>
+      <p class="loading-label" id="load-label">Starting camera…</p>
     </div>
 
     <!-- Error -->
@@ -215,14 +294,15 @@
       <div class="error-icon">📷</div>
       <div class="error-title">Camera Not Working</div>
       <p class="error-msg">
-        Make sure camera permission is allowed for this site in Chrome settings,
-        then reload. Must be on HTTPS.
+        Allow camera access in Chrome Settings → Site Settings → Camera,
+        then hard-reload. Must be on HTTPS.
       </p>
       <button class="error-btn" onclick="location.reload()">Reload</button>
     </div>
 
     <!-- UI -->
     <div id="ui">
+
       <div class="top-bar">
         <div class="brand">Sky<span>Labs</span></div>
         <div class="status">
@@ -230,6 +310,8 @@
           <span class="status-label" id="status-label">Scanning</span>
         </div>
       </div>
+
+      <div id="gesture-toast"></div>
 
       <div class="scan-frame" id="scan-frame">
         <div class="corner tl"></div>
@@ -241,19 +323,34 @@
 
       <div class="hint" id="hint">Point camera at target image</div>
 
-      <div class="bottom-bar">
-        <button class="btn" onclick="scaleDown()">− Size</button>
-        <button class="btn" onclick="resetModel()">↺ Reset</button>
-        <button class="btn" onclick="scaleUp()">+ Size</button>
+      <div id="gesture-guide">
+        <div class="gesture-item">
+          <div class="gesture-icon">👆</div>
+          <div class="gesture-label">Drag rotate</div>
+        </div>
+        <div class="gesture-item">
+          <div class="gesture-icon">🤏</div>
+          <div class="gesture-label">Pinch scale</div>
+        </div>
+        <div class="gesture-item">
+          <div class="gesture-icon">✌️</div>
+          <div class="gesture-label">2-finger spin</div>
+        </div>
       </div>
+
+      <div class="bottom-bar">
+        <button class="btn" id="btn-auto" onclick="toggleAuto()">⟳ Auto</button>
+        <button class="btn" onclick="resetModel()">↺ Reset</button>
+        <button class="btn" onclick="toggleWireframe()">◈ Wire</button>
+      </div>
+
     </div>
 
-    <!-- ══════════════════════════════════════
+    <!-- ══════════════════════════════════════════
          AR SCENE
-         - embedded: prevents fullscreen hijack
-         - renderer alpha:true: makes canvas
-           background transparent so video shows
-    ══════════════════════════════════════ -->
+         renderer alpha:true = transparent canvas
+         so the camera video layer shows through
+    ══════════════════════════════════════════ -->
     <a-scene
       embedded
       mindar-image="imageTargetSrc: assets/targets.mind;
@@ -262,7 +359,10 @@
                     uiError: no;
                     uiScanning: no;"
       color-space="sRGB"
-      renderer="colorManagement: true; physicallyCorrectLights: true; antialias: true; alpha: true;"
+      renderer="colorManagement: true;
+                physicallyCorrectLights: true;
+                antialias: true;
+                alpha: true;"
       vr-mode-ui="enabled: false"
       device-orientation-permission-ui="enabled: false"
       id="arScene"
@@ -273,100 +373,314 @@
 
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
-      <a-light type="ambient"     intensity="1.0" color="#ffffff"></a-light>
-      <a-light type="directional" intensity="1.5" color="#ffffff" position="2 4 2"></a-light>
-      <a-light type="point"       intensity="0.6" color="#00d4ff" position="-1 2 -1"></a-light>
+      <!-- Lighting rig -->
+      <a-light type="ambient"     intensity="0.9" color="#ffffff"></a-light>
+      <a-light type="directional" intensity="1.4" color="#ffffff"  position="2 4 2"></a-light>
+      <a-light type="directional" intensity="0.4" color="#aaddff"  position="-2 1 -2"></a-light>
+      <a-light type="point"       intensity="0.5" color="#00d4ff"  position="0 3 0"></a-light>
 
+      <!-- AR anchor -->
       <a-entity mindar-image-target="targetIndex: 0" id="arTarget">
-        <a-circle
-          radius="0.12" rotation="-90 0 0" position="0 -0.001 0"
-          material="color:#000;opacity:0.2;transparent:true;shader:flat">
-        </a-circle>
-        <a-gltf-model
-          id="arModel"
-          src="#model"
-          position="0 0 0"
-          scale="0.12 0.12 0.12"
-          animation__rotate="property:rotation; to:0 360 0; loop:true; dur:9000; easing:linear"
-          animation__float="property:position; from:0 0 0; to:0 0.04 0; loop:true; dur:2000; dir:alternate; easing:easeInOutSine"
-        ></a-gltf-model>
-      </a-entity>
 
+        <!-- Drop shadow ring -->
+        <a-circle
+          radius="0.14" rotation="-90 0 0" position="0 -0.001 0"
+          material="color:#000;opacity:0.18;transparent:true;shader:flat">
+        </a-circle>
+
+        <!-- The model — gesture wrapper handles transforms -->
+        <a-entity id="gestureWrapper" position="0 0 0" rotation="0 0 0" scale="0.12 0.12 0.12">
+          <a-gltf-model
+            id="arModel"
+            src="#model"
+            position="0 0 0"
+            rotation="0 0 0"
+          ></a-gltf-model>
+        </a-entity>
+
+      </a-entity>
     </a-scene>
 
     <script>
-      const scene      = document.getElementById('arScene');
-      const arTarget   = document.getElementById('arTarget');
-      const arModel    = document.getElementById('arModel');
-      const loadScreen = document.getElementById('loading-screen');
-      const errScreen  = document.getElementById('error-screen');
-      const dot        = document.getElementById('status-dot');
-      const lbl        = document.getElementById('status-label');
-      const hint       = document.getElementById('hint');
-      const frame      = document.getElementById('scan-frame');
+    // ═══════════════════════════════════════════════════
+    //  SKYLABS AR — Gesture + Stability Controller
+    // ═══════════════════════════════════════════════════
 
-      let scale = 0.12;
-      const STEP = 0.03, MIN = 0.04, MAX = 0.40;
+    const scene      = document.getElementById('arScene');
+    const arTarget   = document.getElementById('arTarget');
+    const wrapper    = document.getElementById('gestureWrapper');
+    const loadScreen = document.getElementById('loading-screen');
+    const loadLabel  = document.getElementById('load-label');
+    const errScreen  = document.getElementById('error-screen');
+    const dot        = document.getElementById('status-dot');
+    const lbl        = document.getElementById('status-label');
+    const hint       = document.getElementById('hint');
+    const frame      = document.getElementById('scan-frame');
+    const toast      = document.getElementById('gesture-toast');
+    const guide      = document.getElementById('gesture-guide');
+    const btnAuto    = document.getElementById('btn-auto');
 
-      // ── Dismiss loader when scene is ready ──
-      scene.addEventListener('loaded', () => {
-        // Small delay so camera stream has time to paint
-        setTimeout(() => {
-          loadScreen.classList.add('fade-out');
-          setTimeout(() => loadScreen.style.display = 'none', 750);
-        }, 800);
-      });
+    // ── Model state ──────────────────────────────────────
+    let state = {
+      scale:    0.12,
+      rotX:     0,
+      rotY:     0,
+      autoSpin: true,
+      wireframe:false,
+      detected: false,
+    };
 
-      // ── Fallback error after 15s ──
-      const errTimer = setTimeout(showError, 15000);
-      scene.addEventListener('loaded', () => clearTimeout(errTimer));
+    const SCALE_MIN = 0.03;
+    const SCALE_MAX = 0.55;
 
-      function showError() {
-        loadScreen.style.display = 'none';
-        errScreen.classList.add('visible');
+    // ── Auto-spin animation loop ─────────────────────────
+    let lastTime   = null;
+    let animFrame  = null;
+
+    function spinLoop(ts) {
+      if (state.autoSpin && state.detected) {
+        if (lastTime !== null) {
+          const delta = ts - lastTime;
+          state.rotY  = (state.rotY + delta * 0.036) % 360;
+          applyTransform();
+        }
+        lastTime = ts;
+      } else {
+        lastTime = null;
+      }
+      animFrame = requestAnimationFrame(spinLoop);
+    }
+
+    requestAnimationFrame(spinLoop);
+
+    function applyTransform() {
+      const s = state.scale;
+      wrapper.setAttribute('scale',    `${s} ${s} ${s}`);
+      wrapper.setAttribute('rotation', `${state.rotX} ${state.rotY} 0`);
+    }
+
+    // ── Loader / error ───────────────────────────────────
+    scene.addEventListener('loaded', () => {
+      loadLabel.textContent = 'Almost ready…';
+
+      // Force all video elements visible (camera feed fix)
+      setTimeout(() => {
+        document.querySelectorAll('video').forEach(v => {
+          v.style.cssText = [
+            'position:fixed!important',
+            'top:0!important', 'left:0!important',
+            'width:100vw!important', 'height:100vh!important',
+            'object-fit:cover!important',
+            'z-index:1!important',
+            'display:block!important',
+            'visibility:visible!important',
+            'opacity:1!important',
+            'pointer-events:none!important',
+          ].join(';');
+        });
+
+        // Dismiss loader
+        loadScreen.classList.add('fade-out');
+        setTimeout(() => loadScreen.style.display = 'none', 750);
+      }, 800);
+    });
+
+    // Fallback — if nothing loads in 16s show error
+    const errTimer = setTimeout(() => {
+      if (loadScreen.style.display !== 'none') showError();
+    }, 16000);
+    scene.addEventListener('loaded', () => clearTimeout(errTimer));
+
+    function showError() {
+      loadScreen.style.display = 'none';
+      errScreen.classList.add('visible');
+    }
+
+    // ── Target detected / lost ───────────────────────────
+    arTarget.addEventListener('targetFound', () => {
+      state.detected = true;
+      dot.classList.add('found');
+      lbl.textContent = 'Detected';
+      hint.classList.add('hidden');
+      frame.classList.add('found');
+      frame.classList.add('hidden');
+      guide.classList.add('show');
+      setTimeout(() => guide.classList.remove('show'), 4000);
+    });
+
+    arTarget.addEventListener('targetLost', () => {
+      state.detected = false;
+      dot.classList.remove('found');
+      lbl.textContent = 'Scanning';
+      hint.classList.remove('hidden');
+      frame.classList.remove('found');
+      frame.classList.remove('hidden');
+      guide.classList.remove('show');
+    });
+
+    // ── Toast helper ─────────────────────────────────────
+    let toastTimer = null;
+    function showToast(msg) {
+      toast.textContent = msg;
+      toast.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toast.classList.remove('show'), 1600);
+    }
+
+    // ── Buttons ──────────────────────────────────────────
+    function toggleAuto() {
+      state.autoSpin = !state.autoSpin;
+      btnAuto.classList.toggle('active-toggle', state.autoSpin);
+      showToast(state.autoSpin ? 'Auto-spin on' : 'Auto-spin off');
+    }
+
+    function resetModel() {
+      state.scale  = 0.12;
+      state.rotX   = 0;
+      state.rotY   = 0;
+      state.autoSpin = true;
+      btnAuto.classList.add('active-toggle');
+      applyTransform();
+      showToast('Reset');
+    }
+
+    function toggleWireframe() {
+      state.wireframe = !state.wireframe;
+      const model = document.getElementById('arModel');
+      const meshes = model.object3D ? model.object3D : null;
+      if (meshes) {
+        meshes.traverse(node => {
+          if (node.isMesh && node.material) {
+            if (Array.isArray(node.material)) {
+              node.material.forEach(m => m.wireframe = state.wireframe);
+            } else {
+              node.material.wireframe = state.wireframe;
+            }
+          }
+        });
+      }
+      showToast(state.wireframe ? 'Wireframe on' : 'Wireframe off');
+    }
+
+    // Mark auto-spin button as active on load
+    btnAuto.classList.add('active-toggle');
+
+    // ════════════════════════════════════════════════════
+    //  GESTURE SYSTEM
+    //  Supports:
+    //  • 1-finger drag  → rotate model (X and Y axis)
+    //  • 2-finger pinch → scale model
+    //  • 2-finger twist → rotate model on Y axis
+    // ════════════════════════════════════════════════════
+
+    const gestureState = {
+      active:       false,
+      touchCount:   0,
+      lastX:        0,
+      lastY:        0,
+      lastDist:     0,
+      lastAngle:    0,
+    };
+
+    function getTouchDist(t1, t2) {
+      const dx = t1.clientX - t2.clientX;
+      const dy = t1.clientY - t2.clientY;
+      return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    function getTouchAngle(t1, t2) {
+      return Math.atan2(
+        t2.clientY - t1.clientY,
+        t2.clientX - t1.clientX
+      ) * (180 / Math.PI);
+    }
+
+    function getTouchMidpoint(t1, t2) {
+      return {
+        x: (t1.clientX + t2.clientX) / 2,
+        y: (t1.clientY + t2.clientY) / 2,
+      };
+    }
+
+    document.addEventListener('touchstart', e => {
+      if (!state.detected) return;
+      e.preventDefault();
+
+      gestureState.active     = true;
+      gestureState.touchCount = e.touches.length;
+
+      if (e.touches.length === 1) {
+        gestureState.lastX = e.touches[0].clientX;
+        gestureState.lastY = e.touches[0].clientY;
+        // Pause auto-spin while user drags
+        state.autoSpin = false;
+        btnAuto.classList.remove('active-toggle');
       }
 
-      // ── After scene loads, make sure video is visible ──
-      scene.addEventListener('loaded', () => {
-        // MindAR creates a <video> element — force it visible
-        const videos = document.querySelectorAll('video');
-        videos.forEach(v => {
-          v.style.cssText = `
-            position: fixed !important;
-            top: 0 !important;
-            left: 0 !important;
-            width: 100vw !important;
-            height: 100vh !important;
-            object-fit: cover !important;
-            z-index: 1 !important;
-            display: block !important;
-            visibility: visible !important;
-            opacity: 1 !important;
-          `;
-        });
-      });
+      if (e.touches.length === 2) {
+        gestureState.lastDist  = getTouchDist(e.touches[0], e.touches[1]);
+        gestureState.lastAngle = getTouchAngle(e.touches[0], e.touches[1]);
+        state.autoSpin = false;
+        btnAuto.classList.remove('active-toggle');
+      }
+    }, { passive: false });
 
-      // ── Target found / lost ──
-      arTarget.addEventListener('targetFound', () => {
-        dot.classList.add('found');
-        lbl.textContent = 'Detected';
-        hint.classList.add('hidden');
-        frame.classList.add('found');
-      });
+    document.addEventListener('touchmove', e => {
+      if (!gestureState.active || !state.detected) return;
+      e.preventDefault();
 
-      arTarget.addEventListener('targetLost', () => {
-        dot.classList.remove('found');
-        lbl.textContent = 'Scanning';
-        hint.classList.remove('hidden');
-        frame.classList.remove('found');
-      });
+      // ── 1 finger: rotate ────────────────────────────
+      if (e.touches.length === 1) {
+        const dx = e.touches[0].clientX - gestureState.lastX;
+        const dy = e.touches[0].clientY - gestureState.lastY;
 
-      // ── Buttons ──
-      function scaleUp()   { scale = Math.min(scale + STEP, MAX); apply(); }
-      function scaleDown() { scale = Math.max(scale - STEP, MIN); apply(); }
-      function apply()     { arModel.setAttribute('scale', `${scale} ${scale} ${scale}`); }
-      function resetModel(){ scale = 0.12; apply(); arModel.setAttribute('rotation','0 0 0'); }
+        state.rotY += dx * 0.55;
+        state.rotX  = Math.max(-60, Math.min(60, state.rotX + dy * 0.55));
+
+        gestureState.lastX = e.touches[0].clientX;
+        gestureState.lastY = e.touches[0].clientY;
+
+        applyTransform();
+      }
+
+      // ── 2 fingers: pinch-scale + twist-rotate ───────
+      if (e.touches.length === 2) {
+        const newDist  = getTouchDist(e.touches[0], e.touches[1]);
+        const newAngle = getTouchAngle(e.touches[0], e.touches[1]);
+
+        // Scale
+        const scaleFactor = newDist / gestureState.lastDist;
+        state.scale = Math.max(SCALE_MIN, Math.min(SCALE_MAX, state.scale * scaleFactor));
+
+        // Twist rotation
+        const angleDelta = newAngle - gestureState.lastAngle;
+        state.rotY += angleDelta * 1.2;
+
+        gestureState.lastDist  = newDist;
+        gestureState.lastAngle = newAngle;
+
+        applyTransform();
+      }
+    }, { passive: false });
+
+    document.addEventListener('touchend', e => {
+      if (e.touches.length === 0) {
+        gestureState.active = false;
+      }
+      gestureState.touchCount = e.touches.length;
+    }, { passive: false });
+
+    // ── Double-tap to reset ──────────────────────────────
+    let lastTap = 0;
+    document.addEventListener('touchend', e => {
+      const now = Date.now();
+      if (now - lastTap < 300) {
+        resetModel();
+        showToast('Double-tap: Reset!');
+      }
+      lastTap = now;
+    }, { passive: true });
+
     </script>
-
   </body>
 </html>
