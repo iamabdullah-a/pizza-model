@@ -5,17 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>SkyLabs AR</title>
 
-    <!-- A-Frame FIRST, then MindAR -->
+    <!-- A-Frame FIRST then MindAR — order is critical -->
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
 
     <style>
-      *, *::before, *::after {
-        margin: 0; padding: 0; box-sizing: border-box;
-      }
+      *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
       html, body {
         width: 100%; height: 100%;
@@ -24,12 +21,42 @@
         font-family: 'Segoe UI', system-ui, sans-serif;
       }
 
-      /* A-Scene fills screen */
+      /* ── CAMERA FEED FIX ──────────────────────────────────
+         MindAR injects a <video> and a canvas for the camera.
+         We must force them visible and behind the AR canvas.
+      ──────────────────────────────────────────────────── */
+      video {
+        position: fixed !important;
+        top: 0 !important; left: 0 !important;
+        width: 100vw !important; height: 100vh !important;
+        object-fit: cover !important;
+        z-index: 1 !important;
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+      }
+
+      /* MindAR injects its own container — force it visible too */
+      .mindar-ui-overlay { display: none !important; }
+
+      /* A-Frame canvas sits on top of video, transparent background */
       a-scene {
         position: fixed !important;
         top: 0 !important; left: 0 !important;
         width: 100vw !important; height: 100vh !important;
-        z-index: 0;
+        z-index: 2 !important;
+        background: transparent !important;
+      }
+
+      canvas {
+        background: transparent !important;
+      }
+
+      /* UI sits on top of everything */
+      #ui {
+        position: fixed; inset: 0;
+        z-index: 100;
+        pointer-events: none;
       }
 
       /* ── Loading Screen ── */
@@ -73,7 +100,7 @@
       }
       #error-screen.visible { display: flex; }
       .error-icon { font-size: 2.5rem; }
-      .error-title { font-size: 1rem; font-weight: 700; color: #fff; letter-spacing: 0.05em; }
+      .error-title { font-size: 1rem; font-weight: 700; color: #fff; }
       .error-msg { font-size: 0.78rem; color: rgba(255,255,255,0.45); line-height: 1.6; max-width: 280px; }
       .error-btn {
         margin-top: 0.5rem; background: #00d4ff; color: #000;
@@ -82,54 +109,47 @@
         border-radius: 999px; border: none; cursor: pointer;
       }
 
-      /* ── UI Overlay ── */
-      #ui { position: fixed; inset: 0; z-index: 100; pointer-events: none; }
-
+      /* ── Top Bar ── */
       .top-bar {
         position: absolute; top: 0; left: 0; right: 0;
-        padding: env(safe-area-inset-top, 12px) 1.2rem 1rem;
+        padding: 12px 1.2rem 1rem;
         display: flex; align-items: center; justify-content: space-between;
         background: linear-gradient(180deg, rgba(0,0,0,0.6) 0%, transparent 100%);
       }
-
       .brand { font-size: 0.95rem; font-weight: 800; letter-spacing: 0.25em; text-transform: uppercase; color: #fff; }
       .brand span { color: #00d4ff; }
-
       .status { display: flex; align-items: center; gap: 0.5rem; }
-
       .status-dot {
         width: 9px; height: 9px; border-radius: 50%;
         background: #ff3b3b; box-shadow: 0 0 8px #ff3b3b;
         transition: background 0.35s, box-shadow 0.35s;
       }
       .status-dot.found { background: #00ff88; box-shadow: 0 0 8px #00ff88; }
-
       .status-label { font-size: 0.65rem; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(255,255,255,0.5); }
 
-      /* Scan frame */
+      /* ── Scan Frame ── */
       .scan-frame {
         position: absolute; top: 50%; left: 50%;
         transform: translate(-50%, -52%);
         width: min(68vw, 260px); height: min(68vw, 260px);
       }
-
       .corner {
         position: absolute; width: 24px; height: 24px;
         border-color: rgba(0,212,255,0.65); border-style: solid;
         transition: border-color 0.3s, width 0.3s, height 0.3s;
       }
-      .corner.tl { top: 0;    left: 0;   border-width: 2.5px 0 0 2.5px; }
-      .corner.tr { top: 0;    right: 0;  border-width: 2.5px 2.5px 0 0; }
-      .corner.bl { bottom: 0; left: 0;   border-width: 0 0 2.5px 2.5px; }
-      .corner.br { bottom: 0; right: 0;  border-width: 0 2.5px 2.5px 0; }
+      .corner.tl { top:0; left:0; border-width: 2.5px 0 0 2.5px; }
+      .corner.tr { top:0; right:0; border-width: 2.5px 2.5px 0 0; }
+      .corner.bl { bottom:0; left:0; border-width: 0 0 2.5px 2.5px; }
+      .corner.br { bottom:0; right:0; border-width: 0 2.5px 2.5px 0; }
       .scan-frame.found .corner { border-color: #00ff88; width: 30px; height: 30px; }
 
       .scan-line {
         position: absolute; left: 4px; right: 4px; height: 1.5px;
         background: linear-gradient(90deg, transparent, #00d4ff, transparent);
-        animation: scan 2.2s ease-in-out infinite; opacity: 0.7;
+        animation: scanline 2.2s ease-in-out infinite; opacity: 0.7;
       }
-      @keyframes scan {
+      @keyframes scanline {
         0%   { top: 4px; opacity: 0; }
         10%  { opacity: 0.7; }
         90%  { opacity: 0.7; }
@@ -137,13 +157,13 @@
       }
       .scan-frame.found .scan-line { display: none; }
 
-      /* Hint */
+      /* ── Hint ── */
       .hint {
         position: absolute; bottom: 7.5rem; left: 50%;
         transform: translateX(-50%);
         background: rgba(0,0,0,0.55);
         border: 1px solid rgba(255,255,255,0.1);
-        backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+        backdrop-filter: blur(10px);
         border-radius: 999px; padding: 0.55rem 1.3rem;
         color: rgba(255,255,255,0.7); font-size: 0.74rem;
         letter-spacing: 0.06em; white-space: nowrap;
@@ -151,17 +171,16 @@
         transition: opacity 0.4s;
       }
       .hint.hidden { opacity: 0; }
-      @keyframes pulse { 0%, 100% { opacity: 0.7; } 50% { opacity: 1; } }
+      @keyframes pulse { 0%,100%{opacity:0.7} 50%{opacity:1} }
 
-      /* Bottom controls */
+      /* ── Bottom Bar ── */
       .bottom-bar {
         position: absolute; bottom: 0; left: 0; right: 0;
-        padding: 1rem 1.5rem env(safe-area-inset-bottom, 16px);
+        padding: 1rem 1.5rem 1.4rem;
         display: flex; justify-content: center; gap: 0.75rem;
         background: linear-gradient(0deg, rgba(0,0,0,0.55) 0%, transparent 100%);
         pointer-events: all;
       }
-
       .btn {
         background: rgba(255,255,255,0.08);
         border: 1px solid rgba(255,255,255,0.15);
@@ -169,8 +188,7 @@
         font-size: 0.7rem; font-weight: 600;
         letter-spacing: 0.12em; text-transform: uppercase;
         padding: 0.55rem 1.1rem; border-radius: 999px;
-        cursor: pointer;
-        backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+        cursor: pointer; backdrop-filter: blur(8px);
         -webkit-tap-highlight-color: transparent;
         transition: background 0.2s, border-color 0.2s, transform 0.1s;
         user-select: none;
@@ -185,25 +203,25 @@
 
   <body>
 
-    <!-- Loading Screen -->
+    <!-- Loading -->
     <div id="loading-screen">
       <div class="brand-title">Sky<span>Labs</span> AR</div>
       <div class="spinner"></div>
-      <p class="loading-label">Loading experience…</p>
+      <p class="loading-label">Starting camera…</p>
     </div>
 
-    <!-- Error Screen -->
+    <!-- Error -->
     <div id="error-screen">
       <div class="error-icon">📷</div>
-      <div class="error-title">Camera Access Required</div>
+      <div class="error-title">Camera Not Working</div>
       <p class="error-msg">
-        Allow camera access when prompted, then reload.
-        Must be on HTTPS (GitHub Pages).
+        Make sure camera permission is allowed for this site in Chrome settings,
+        then reload. Must be on HTTPS.
       </p>
       <button class="error-btn" onclick="location.reload()">Reload</button>
     </div>
 
-    <!-- UI Overlay -->
+    <!-- UI -->
     <div id="ui">
       <div class="top-bar">
         <div class="brand">Sky<span>Labs</span></div>
@@ -230,14 +248,12 @@
       </div>
     </div>
 
-    <!-- ══════════════════════════════════════════
+    <!-- ══════════════════════════════════════
          AR SCENE
-         CRITICAL FIXES vs previous version:
-         1. `embedded`  — stops A-Frame hijacking
-                          fullscreen on mobile (fixes black screen)
-         2. A-Frame 1.4.2 loaded BEFORE MindAR
-         3. autoStart: true on mindar-image
-    ══════════════════════════════════════════ -->
+         - embedded: prevents fullscreen hijack
+         - renderer alpha:true: makes canvas
+           background transparent so video shows
+    ══════════════════════════════════════ -->
     <a-scene
       embedded
       mindar-image="imageTargetSrc: assets/targets.mind;
@@ -246,106 +262,110 @@
                     uiError: no;
                     uiScanning: no;"
       color-space="sRGB"
-      renderer="colorManagement: true; physicallyCorrectLights: true; antialias: true;"
+      renderer="colorManagement: true; physicallyCorrectLights: true; antialias: true; alpha: true;"
       vr-mode-ui="enabled: false"
       device-orientation-permission-ui="enabled: false"
       id="arScene"
     >
-
       <a-assets timeout="30000">
         <a-asset-item id="model" src="assets/model.glb"></a-asset-item>
       </a-assets>
 
-      <!-- Camera -->
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
-      <!-- Lighting -->
       <a-light type="ambient"     intensity="1.0" color="#ffffff"></a-light>
       <a-light type="directional" intensity="1.5" color="#ffffff" position="2 4 2"></a-light>
       <a-light type="point"       intensity="0.6" color="#00d4ff" position="-1 2 -1"></a-light>
 
-      <!-- AR Target -->
       <a-entity mindar-image-target="targetIndex: 0" id="arTarget">
-
-        <!-- Shadow ring under model -->
         <a-circle
-          radius="0.12"
-          rotation="-90 0 0"
-          position="0 -0.001 0"
-          material="color: #000000; opacity: 0.2; transparent: true; shader: flat">
+          radius="0.12" rotation="-90 0 0" position="0 -0.001 0"
+          material="color:#000;opacity:0.2;transparent:true;shader:flat">
         </a-circle>
-
-        <!-- 3D Model with rotate + float animations -->
         <a-gltf-model
           id="arModel"
           src="#model"
           position="0 0 0"
           scale="0.12 0.12 0.12"
-          rotation="0 0 0"
-          animation__rotate="property: rotation; to: 0 360 0; loop: true; dur: 9000; easing: linear"
-          animation__float="property: position; from: 0 0 0; to: 0 0.04 0; loop: true; dur: 2000; dir: alternate; easing: easeInOutSine"
+          animation__rotate="property:rotation; to:0 360 0; loop:true; dur:9000; easing:linear"
+          animation__float="property:position; from:0 0 0; to:0 0.04 0; loop:true; dur:2000; dir:alternate; easing:easeInOutSine"
         ></a-gltf-model>
-
       </a-entity>
 
     </a-scene>
 
     <script>
       const scene      = document.getElementById('arScene');
-      const target     = document.getElementById('arTarget');
-      const model      = document.getElementById('arModel');
+      const arTarget   = document.getElementById('arTarget');
+      const arModel    = document.getElementById('arModel');
       const loadScreen = document.getElementById('loading-screen');
       const errScreen  = document.getElementById('error-screen');
       const dot        = document.getElementById('status-dot');
-      const label      = document.getElementById('status-label');
+      const lbl        = document.getElementById('status-label');
       const hint       = document.getElementById('hint');
       const frame      = document.getElementById('scan-frame');
 
-      let currentScale = 0.12;
+      let scale = 0.12;
       const STEP = 0.03, MIN = 0.04, MAX = 0.40;
 
-      // Hide loader when scene is ready
+      // ── Dismiss loader when scene is ready ──
       scene.addEventListener('loaded', () => {
+        // Small delay so camera stream has time to paint
         setTimeout(() => {
           loadScreen.classList.add('fade-out');
           setTimeout(() => loadScreen.style.display = 'none', 750);
-        }, 500);
+        }, 800);
       });
 
-      // Fallback error: if still black after 14s
-      const errorTimer = setTimeout(showError, 14000);
-      scene.addEventListener('loaded', () => clearTimeout(errorTimer));
+      // ── Fallback error after 15s ──
+      const errTimer = setTimeout(showError, 15000);
+      scene.addEventListener('loaded', () => clearTimeout(errTimer));
 
       function showError() {
         loadScreen.style.display = 'none';
         errScreen.classList.add('visible');
       }
 
-      // Target detected / lost
-      target.addEventListener('targetFound', () => {
+      // ── After scene loads, make sure video is visible ──
+      scene.addEventListener('loaded', () => {
+        // MindAR creates a <video> element — force it visible
+        const videos = document.querySelectorAll('video');
+        videos.forEach(v => {
+          v.style.cssText = `
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            object-fit: cover !important;
+            z-index: 1 !important;
+            display: block !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+          `;
+        });
+      });
+
+      // ── Target found / lost ──
+      arTarget.addEventListener('targetFound', () => {
         dot.classList.add('found');
-        label.textContent = 'Detected';
+        lbl.textContent = 'Detected';
         hint.classList.add('hidden');
         frame.classList.add('found');
       });
 
-      target.addEventListener('targetLost', () => {
+      arTarget.addEventListener('targetLost', () => {
         dot.classList.remove('found');
-        label.textContent = 'Scanning';
+        lbl.textContent = 'Scanning';
         hint.classList.remove('hidden');
         frame.classList.remove('found');
       });
 
-      // Scale buttons
-      function scaleUp()   { currentScale = Math.min(currentScale + STEP, MAX); apply(); }
-      function scaleDown() { currentScale = Math.max(currentScale - STEP, MIN); apply(); }
-      function apply()     { model.setAttribute('scale', `${currentScale} ${currentScale} ${currentScale}`); }
-
-      function resetModel() {
-        currentScale = 0.12;
-        apply();
-        model.setAttribute('rotation', '0 0 0');
-      }
+      // ── Buttons ──
+      function scaleUp()   { scale = Math.min(scale + STEP, MAX); apply(); }
+      function scaleDown() { scale = Math.max(scale - STEP, MIN); apply(); }
+      function apply()     { arModel.setAttribute('scale', `${scale} ${scale} ${scale}`); }
+      function resetModel(){ scale = 0.12; apply(); arModel.setAttribute('rotation','0 0 0'); }
     </script>
 
   </body>
