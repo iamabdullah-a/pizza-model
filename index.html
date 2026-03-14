@@ -2,227 +2,183 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>WebAR Viewer</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <title>SkyLabs AR</title>
 
-    <!-- MindAR + A-Frame via CDN (no install needed) -->
+    <!-- A-Frame FIRST, then MindAR -->
+    <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
-    <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
 
     <style>
-      * {
-        margin: 0;
-        padding: 0;
-        box-sizing: border-box;
+      *, *::before, *::after {
+        margin: 0; padding: 0; box-sizing: border-box;
       }
 
-      body {
-        font-family: 'Segoe UI', sans-serif;
-        background: #000;
+      html, body {
+        width: 100%; height: 100%;
         overflow: hidden;
+        background: #000;
+        font-family: 'Segoe UI', system-ui, sans-serif;
+      }
+
+      /* A-Scene fills screen */
+      a-scene {
+        position: fixed !important;
+        top: 0 !important; left: 0 !important;
+        width: 100vw !important; height: 100vh !important;
+        z-index: 0;
       }
 
       /* ── Loading Screen ── */
       #loading-screen {
-        position: fixed;
-        inset: 0;
-        background: #0a0a0a;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        z-index: 9999;
-        transition: opacity 0.6s ease;
+        position: fixed; inset: 0;
+        background: #050505;
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        z-index: 9999; gap: 1.2rem;
+        transition: opacity 0.7s ease;
       }
+      #loading-screen.fade-out { opacity: 0; pointer-events: none; }
 
-      #loading-screen.hidden {
-        opacity: 0;
-        pointer-events: none;
+      .brand-title {
+        font-size: 1.5rem; font-weight: 800;
+        letter-spacing: 0.35em; text-transform: uppercase; color: #fff;
       }
-
-      .loader-logo {
-        font-size: 1.4rem;
-        font-weight: 700;
-        letter-spacing: 0.3em;
-        color: #fff;
-        margin-bottom: 2rem;
-        text-transform: uppercase;
-      }
-
-      .loader-logo span {
-        color: #00d4ff;
-      }
+      .brand-title span { color: #00d4ff; }
 
       .spinner {
-        width: 44px;
-        height: 44px;
-        border: 3px solid rgba(255,255,255,0.1);
+        width: 42px; height: 42px;
+        border: 3px solid rgba(255,255,255,0.08);
         border-top-color: #00d4ff;
         border-radius: 50%;
-        animation: spin 0.8s linear infinite;
-        margin-bottom: 1.2rem;
+        animation: spin 0.75s linear infinite;
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+
+      .loading-label {
+        font-size: 0.72rem; letter-spacing: 0.15em;
+        text-transform: uppercase; color: rgba(255,255,255,0.35);
       }
 
-      @keyframes spin {
-        to { transform: rotate(360deg); }
+      /* ── Error Screen ── */
+      #error-screen {
+        display: none; position: fixed; inset: 0;
+        background: #050505; z-index: 9998;
+        flex-direction: column; align-items: center;
+        justify-content: center; gap: 1rem;
+        padding: 2rem; text-align: center;
       }
-
-      .loader-text {
-        color: rgba(255,255,255,0.45);
-        font-size: 0.8rem;
-        letter-spacing: 0.1em;
+      #error-screen.visible { display: flex; }
+      .error-icon { font-size: 2.5rem; }
+      .error-title { font-size: 1rem; font-weight: 700; color: #fff; letter-spacing: 0.05em; }
+      .error-msg { font-size: 0.78rem; color: rgba(255,255,255,0.45); line-height: 1.6; max-width: 280px; }
+      .error-btn {
+        margin-top: 0.5rem; background: #00d4ff; color: #000;
+        font-size: 0.75rem; font-weight: 700; letter-spacing: 0.1em;
+        text-transform: uppercase; padding: 0.65rem 1.6rem;
+        border-radius: 999px; border: none; cursor: pointer;
       }
 
       /* ── UI Overlay ── */
-      #ui-overlay {
-        position: fixed;
-        inset: 0;
-        pointer-events: none;
-        z-index: 100;
-      }
+      #ui { position: fixed; inset: 0; z-index: 100; pointer-events: none; }
 
-      /* Top bar */
       .top-bar {
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        padding: 1rem 1.2rem;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        background: linear-gradient(to bottom, rgba(0,0,0,0.55), transparent);
+        position: absolute; top: 0; left: 0; right: 0;
+        padding: env(safe-area-inset-top, 12px) 1.2rem 1rem;
+        display: flex; align-items: center; justify-content: space-between;
+        background: linear-gradient(180deg, rgba(0,0,0,0.6) 0%, transparent 100%);
       }
 
-      .brand {
-        font-size: 1rem;
-        font-weight: 700;
-        letter-spacing: 0.2em;
-        color: #fff;
-        text-transform: uppercase;
-      }
+      .brand { font-size: 0.95rem; font-weight: 800; letter-spacing: 0.25em; text-transform: uppercase; color: #fff; }
+      .brand span { color: #00d4ff; }
 
-      .brand span {
-        color: #00d4ff;
-      }
+      .status { display: flex; align-items: center; gap: 0.5rem; }
 
       .status-dot {
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        background: #ff4444;
-        box-shadow: 0 0 6px #ff4444;
-        transition: background 0.3s, box-shadow 0.3s;
+        width: 9px; height: 9px; border-radius: 50%;
+        background: #ff3b3b; box-shadow: 0 0 8px #ff3b3b;
+        transition: background 0.35s, box-shadow 0.35s;
+      }
+      .status-dot.found { background: #00ff88; box-shadow: 0 0 8px #00ff88; }
+
+      .status-label { font-size: 0.65rem; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(255,255,255,0.5); }
+
+      /* Scan frame */
+      .scan-frame {
+        position: absolute; top: 50%; left: 50%;
+        transform: translate(-50%, -52%);
+        width: min(68vw, 260px); height: min(68vw, 260px);
       }
 
-      .status-dot.active {
-        background: #00ff88;
-        box-shadow: 0 0 6px #00ff88;
+      .corner {
+        position: absolute; width: 24px; height: 24px;
+        border-color: rgba(0,212,255,0.65); border-style: solid;
+        transition: border-color 0.3s, width 0.3s, height 0.3s;
       }
+      .corner.tl { top: 0;    left: 0;   border-width: 2.5px 0 0 2.5px; }
+      .corner.tr { top: 0;    right: 0;  border-width: 2.5px 2.5px 0 0; }
+      .corner.bl { bottom: 0; left: 0;   border-width: 0 0 2.5px 2.5px; }
+      .corner.br { bottom: 0; right: 0;  border-width: 0 2.5px 2.5px 0; }
+      .scan-frame.found .corner { border-color: #00ff88; width: 30px; height: 30px; }
 
-      /* Scan hint */
-      .scan-hint {
-        position: absolute;
-        bottom: 6rem;
-        left: 50%;
+      .scan-line {
+        position: absolute; left: 4px; right: 4px; height: 1.5px;
+        background: linear-gradient(90deg, transparent, #00d4ff, transparent);
+        animation: scan 2.2s ease-in-out infinite; opacity: 0.7;
+      }
+      @keyframes scan {
+        0%   { top: 4px; opacity: 0; }
+        10%  { opacity: 0.7; }
+        90%  { opacity: 0.7; }
+        100% { top: calc(100% - 4px); opacity: 0; }
+      }
+      .scan-frame.found .scan-line { display: none; }
+
+      /* Hint */
+      .hint {
+        position: absolute; bottom: 7.5rem; left: 50%;
         transform: translateX(-50%);
-        background: rgba(0,0,0,0.6);
-        border: 1px solid rgba(255,255,255,0.12);
-        border-radius: 2rem;
-        padding: 0.6rem 1.4rem;
-        color: rgba(255,255,255,0.75);
-        font-size: 0.78rem;
-        letter-spacing: 0.08em;
-        white-space: nowrap;
-        backdrop-filter: blur(8px);
-        animation: pulse-hint 2.5s ease-in-out infinite;
-        transition: opacity 0.4s ease;
+        background: rgba(0,0,0,0.55);
+        border: 1px solid rgba(255,255,255,0.1);
+        backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+        border-radius: 999px; padding: 0.55rem 1.3rem;
+        color: rgba(255,255,255,0.7); font-size: 0.74rem;
+        letter-spacing: 0.06em; white-space: nowrap;
+        animation: pulse 2.5s ease-in-out infinite;
+        transition: opacity 0.4s;
       }
+      .hint.hidden { opacity: 0; }
+      @keyframes pulse { 0%, 100% { opacity: 0.7; } 50% { opacity: 1; } }
 
-      .scan-hint.hidden {
-        opacity: 0;
-      }
-
-      @keyframes pulse-hint {
-        0%, 100% { opacity: 0.75; }
-        50%       { opacity: 1;    }
-      }
-
-      /* Corner brackets — scanning frame */
-      .frame {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        width: min(70vw, 280px);
-        height: min(70vw, 280px);
-      }
-
-      .frame::before,
-      .frame::after,
-      .frame-inner::before,
-      .frame-inner::after {
-        content: '';
-        position: absolute;
-        width: 22px;
-        height: 22px;
-        border-color: rgba(0, 212, 255, 0.7);
-        border-style: solid;
-      }
-
-      .frame::before        { top: 0;    left: 0;   border-width: 2px 0 0 2px; }
-      .frame::after         { top: 0;    right: 0;  border-width: 2px 2px 0 0; }
-      .frame-inner::before  { bottom: 0; left: 0;   border-width: 0 0 2px 2px; }
-      .frame-inner::after   { bottom: 0; right: 0;  border-width: 0 2px 2px 0; }
-
-      .frame.detected::before,
-      .frame.detected::after,
-      .frame.detected .frame-inner::before,
-      .frame.detected .frame-inner::after {
-        border-color: #00ff88;
-        transition: border-color 0.3s ease;
-      }
-
-      /* Bottom bar */
+      /* Bottom controls */
       .bottom-bar {
-        position: absolute;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        padding: 1rem 1.2rem 1.4rem;
-        background: linear-gradient(to top, rgba(0,0,0,0.55), transparent);
-        display: flex;
-        justify-content: center;
-        gap: 1rem;
+        position: absolute; bottom: 0; left: 0; right: 0;
+        padding: 1rem 1.5rem env(safe-area-inset-bottom, 16px);
+        display: flex; justify-content: center; gap: 0.75rem;
+        background: linear-gradient(0deg, rgba(0,0,0,0.55) 0%, transparent 100%);
+        pointer-events: all;
       }
 
       .btn {
-        pointer-events: all;
-        background: rgba(255,255,255,0.1);
-        border: 1px solid rgba(255,255,255,0.18);
-        color: #fff;
-        font-size: 0.72rem;
-        letter-spacing: 0.1em;
-        padding: 0.5rem 1rem;
-        border-radius: 2rem;
+        background: rgba(255,255,255,0.08);
+        border: 1px solid rgba(255,255,255,0.15);
+        color: rgba(255,255,255,0.85);
+        font-size: 0.7rem; font-weight: 600;
+        letter-spacing: 0.12em; text-transform: uppercase;
+        padding: 0.55rem 1.1rem; border-radius: 999px;
         cursor: pointer;
-        backdrop-filter: blur(8px);
-        text-transform: uppercase;
-        transition: background 0.2s, border-color 0.2s;
+        backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
         -webkit-tap-highlight-color: transparent;
+        transition: background 0.2s, border-color 0.2s, transform 0.1s;
+        user-select: none;
       }
-
       .btn:active {
-        background: rgba(0, 212, 255, 0.2);
-        border-color: rgba(0, 212, 255, 0.5);
-      }
-
-      /* ── A-Scene fills screen ── */
-      a-scene {
-        position: fixed !important;
-        inset: 0 !important;
-        width: 100% !important;
-        height: 100% !important;
+        background: rgba(0,212,255,0.18);
+        border-color: rgba(0,212,255,0.45);
+        transform: scale(0.96);
       }
     </style>
   </head>
@@ -231,40 +187,72 @@
 
     <!-- Loading Screen -->
     <div id="loading-screen">
-      <div class="loader-logo">Sky<span>Labs</span> AR</div>
+      <div class="brand-title">Sky<span>Labs</span> AR</div>
       <div class="spinner"></div>
-      <p class="loader-text">Initialising camera…</p>
+      <p class="loading-label">Loading experience…</p>
+    </div>
+
+    <!-- Error Screen -->
+    <div id="error-screen">
+      <div class="error-icon">📷</div>
+      <div class="error-title">Camera Access Required</div>
+      <p class="error-msg">
+        Allow camera access when prompted, then reload.
+        Must be on HTTPS (GitHub Pages).
+      </p>
+      <button class="error-btn" onclick="location.reload()">Reload</button>
     </div>
 
     <!-- UI Overlay -->
-    <div id="ui-overlay">
+    <div id="ui">
       <div class="top-bar">
         <div class="brand">Sky<span>Labs</span></div>
-        <div class="status-dot" id="status-dot"></div>
+        <div class="status">
+          <div class="status-dot" id="status-dot"></div>
+          <span class="status-label" id="status-label">Scanning</span>
+        </div>
       </div>
 
-      <div class="frame" id="scan-frame">
-        <div class="frame-inner"></div>
+      <div class="scan-frame" id="scan-frame">
+        <div class="corner tl"></div>
+        <div class="corner tr"></div>
+        <div class="corner bl"></div>
+        <div class="corner br"></div>
+        <div class="scan-line"></div>
       </div>
 
-      <p class="scan-hint" id="scan-hint">Point camera at the target image</p>
+      <div class="hint" id="hint">Point camera at target image</div>
 
       <div class="bottom-bar">
-        <button class="btn" onclick="resetScene()">↺ Reset</button>
-        <button class="btn" onclick="toggleScale()">⤢ Scale</button>
+        <button class="btn" onclick="scaleDown()">− Size</button>
+        <button class="btn" onclick="resetModel()">↺ Reset</button>
+        <button class="btn" onclick="scaleUp()">+ Size</button>
       </div>
     </div>
 
-    <!-- AR Scene -->
+    <!-- ══════════════════════════════════════════
+         AR SCENE
+         CRITICAL FIXES vs previous version:
+         1. `embedded`  — stops A-Frame hijacking
+                          fullscreen on mobile (fixes black screen)
+         2. A-Frame 1.4.2 loaded BEFORE MindAR
+         3. autoStart: true on mindar-image
+    ══════════════════════════════════════════ -->
     <a-scene
-      mindar-image="imageTargetSrc: assets/targets.mind; autoStart: true; uiLoading: no; uiError: no; uiScanning: no;"
+      embedded
+      mindar-image="imageTargetSrc: assets/targets.mind;
+                    autoStart: true;
+                    uiLoading: no;
+                    uiError: no;
+                    uiScanning: no;"
       color-space="sRGB"
-      renderer="colorManagement: true; physicallyCorrectLights: true;"
+      renderer="colorManagement: true; physicallyCorrectLights: true; antialias: true;"
       vr-mode-ui="enabled: false"
       device-orientation-permission-ui="enabled: false"
-      id="ar-scene"
+      id="arScene"
     >
-      <a-assets>
+
+      <a-assets timeout="30000">
         <a-asset-item id="model" src="assets/model.glb"></a-asset-item>
       </a-assets>
 
@@ -272,67 +260,91 @@
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
       <!-- Lighting -->
-      <a-light type="ambient" color="#ffffff" intensity="0.8"></a-light>
-      <a-light type="directional" color="#ffffff" intensity="1.2"
-               position="1 2 1"></a-light>
+      <a-light type="ambient"     intensity="1.0" color="#ffffff"></a-light>
+      <a-light type="directional" intensity="1.5" color="#ffffff" position="2 4 2"></a-light>
+      <a-light type="point"       intensity="0.6" color="#00d4ff" position="-1 2 -1"></a-light>
 
-      <!-- AR Target: model appears when target image is detected -->
-      <a-entity mindar-image-target="targetIndex: 0" id="ar-target">
+      <!-- AR Target -->
+      <a-entity mindar-image-target="targetIndex: 0" id="arTarget">
+
+        <!-- Shadow ring under model -->
+        <a-circle
+          radius="0.12"
+          rotation="-90 0 0"
+          position="0 -0.001 0"
+          material="color: #000000; opacity: 0.2; transparent: true; shader: flat">
+        </a-circle>
+
+        <!-- 3D Model with rotate + float animations -->
         <a-gltf-model
-          id="ar-model"
+          id="arModel"
           src="#model"
-          position="0 0 0.05"
+          position="0 0 0"
           scale="0.12 0.12 0.12"
           rotation="0 0 0"
-          animation="property: rotation; to: 0 360 0; loop: true; dur: 8000; easing: linear"
+          animation__rotate="property: rotation; to: 0 360 0; loop: true; dur: 9000; easing: linear"
+          animation__float="property: position; from: 0 0 0; to: 0 0.04 0; loop: true; dur: 2000; dir: alternate; easing: easeInOutSine"
         ></a-gltf-model>
+
       </a-entity>
 
     </a-scene>
 
     <script>
-      // ── State ──────────────────────────────────────────────
-      let scaleToggle = false;
-      const scales   = ['0.08 0.08 0.08', '0.12 0.12 0.12', '0.18 0.18 0.18'];
-      let scaleIdx    = 1;
+      const scene      = document.getElementById('arScene');
+      const target     = document.getElementById('arTarget');
+      const model      = document.getElementById('arModel');
+      const loadScreen = document.getElementById('loading-screen');
+      const errScreen  = document.getElementById('error-screen');
+      const dot        = document.getElementById('status-dot');
+      const label      = document.getElementById('status-label');
+      const hint       = document.getElementById('hint');
+      const frame      = document.getElementById('scan-frame');
 
-      // ── Hide loading screen once A-Frame is ready ──────────
-      document.querySelector('a-scene').addEventListener('loaded', () => {
-        const ls = document.getElementById('loading-screen');
-        ls.classList.add('hidden');
-        setTimeout(() => ls.style.display = 'none', 700);
+      let currentScale = 0.12;
+      const STEP = 0.03, MIN = 0.04, MAX = 0.40;
+
+      // Hide loader when scene is ready
+      scene.addEventListener('loaded', () => {
+        setTimeout(() => {
+          loadScreen.classList.add('fade-out');
+          setTimeout(() => loadScreen.style.display = 'none', 750);
+        }, 500);
       });
 
-      // ── Target detected / lost ─────────────────────────────
-      const target   = document.getElementById('ar-target');
-      const dot      = document.getElementById('status-dot');
-      const hint     = document.getElementById('scan-hint');
-      const frame    = document.getElementById('scan-frame');
+      // Fallback error: if still black after 14s
+      const errorTimer = setTimeout(showError, 14000);
+      scene.addEventListener('loaded', () => clearTimeout(errorTimer));
 
+      function showError() {
+        loadScreen.style.display = 'none';
+        errScreen.classList.add('visible');
+      }
+
+      // Target detected / lost
       target.addEventListener('targetFound', () => {
-        dot.classList.add('active');
+        dot.classList.add('found');
+        label.textContent = 'Detected';
         hint.classList.add('hidden');
-        frame.classList.add('detected');
+        frame.classList.add('found');
       });
 
       target.addEventListener('targetLost', () => {
-        dot.classList.remove('active');
+        dot.classList.remove('found');
+        label.textContent = 'Scanning';
         hint.classList.remove('hidden');
-        frame.classList.remove('detected');
+        frame.classList.remove('found');
       });
 
-      // ── Buttons ────────────────────────────────────────────
-      function resetScene() {
-        const model = document.getElementById('ar-model');
-        scaleIdx = 1;
-        model.setAttribute('scale', scales[scaleIdx]);
-        model.setAttribute('rotation', '0 0 0');
-      }
+      // Scale buttons
+      function scaleUp()   { currentScale = Math.min(currentScale + STEP, MAX); apply(); }
+      function scaleDown() { currentScale = Math.max(currentScale - STEP, MIN); apply(); }
+      function apply()     { model.setAttribute('scale', `${currentScale} ${currentScale} ${currentScale}`); }
 
-      function toggleScale() {
-        scaleIdx = (scaleIdx + 1) % scales.length;
-        document.getElementById('ar-model')
-                .setAttribute('scale', scales[scaleIdx]);
+      function resetModel() {
+        currentScale = 0.12;
+        apply();
+        model.setAttribute('rotation', '0 0 0');
       }
     </script>
 
